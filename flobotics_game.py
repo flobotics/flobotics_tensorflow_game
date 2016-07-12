@@ -30,7 +30,7 @@ FUTURE_REWARD_DISCOUNT = 0.9
 probability_of_random_action = 1
 max_servo_speed_value = 400  #200 different speeds left, and 200 right
 sum_writer_index = 0
-
+display_game = "n"	#shows the state image, very slow, so enable after some training to check
 
 
 def get_current_state():
@@ -244,7 +244,7 @@ saver = tf.train.Saver()
 
 ########### end create network
 
-#plt.ion()  #to update the matplot image ???
+plt.ion()  #to update the matplot image ???
 
 #state_image = np.zeros([68,68])
 #state_image_data = plt.imshow(state_image)
@@ -260,13 +260,14 @@ try:
 
 		#here we simply plot the state as image, so we can see the "game" while playing
 		# VERY SLOW UPDATE
-		#state_image = np.reshape(state_from_env, (68,68))
-		#plt.imshow(state_image)
-		#plt.show(block=False) 
-		#state_image_data.set_data(state_image)
-		#plt.draw()
-		#plt.show()
-		#state_image_data.update()
+		if display_game == "y":
+			state_image = np.reshape(state_from_env, (68,68))
+			plt.imshow(state_image)
+			plt.show(block=False) 
+			#state_image_data.set_data(state_image)
+			plt.draw()
+			#plt.show()
+			#state_image_data.update()
 	
 		#if we run for the first time, we build a state
 		if first_time == 1:
@@ -296,7 +297,14 @@ try:
 		#if we got the max reward, we change degree_goal mostly, perhaps sometimes force_1/2_goal
 		if reward == 3:
 			print("MAX REWARD -------- NEW DEGREE GOAL")
-			degree_goal = random.randint(0, (max_degree-1) )
+			#degree_goal = random.randint(0, (max_degree-1) )
+			nb = raw_input("new degree_goal:")
+			degree_goal = int(nb)
+			print degree_goal
+			global display_game
+			display_game = raw_input("display game: y or n")
+			print display_game
+			
 
 		do_action(last_action)
 	
