@@ -87,7 +87,6 @@ def choose_next_action(last_state):
 	if random.random() < probability_of_random_action:
 		new_action[0] = random.uniform(0, max_servo_speed_value)
 		new_action[1] = random.uniform(0, max_servo_speed_value)
-		print("a1", new_action)
 	else:
 		readout_t = session.run(output_layer, feed_dict={input_layer: [last_state]})
 		r1 = np.asarray(readout_t)
@@ -97,7 +96,12 @@ def choose_next_action(last_state):
 		if np.isnan(r1[1]) == True:
 			r1[1] = 0
 		new_action = r1
-		print("a2", new_action)
+		
+		if (r1[0] < 0):
+			r1[0] = 0
+		if (r1[1] < 0):
+			r1[1] = 0
+			print("a2", new_action)
 		#action_index = np.argmax(readout_t)
 	
 	return new_action
