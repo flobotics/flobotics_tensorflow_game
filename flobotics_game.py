@@ -27,7 +27,7 @@ RESIZED_DATA_Y = 68
 FUTURE_REWARD_DISCOUNT = 0.9
 
 
-probability_of_random_action = 1
+probability_of_random_action = 0.5
 max_servo_speed_value = 400  #200 different speeds left, and 200 right
 sum_writer_index = 0
 display_game = "n"	#shows the state image, very slow, so enable after some training to check
@@ -82,27 +82,37 @@ def choose_next_action(last_state):
 	global max_servo_speed_value
 
 	#simple decreaseing
-	probability_of_random_action -= 0.0001
+	probability_of_random_action -= 0.000001
 	
 	if random.random() < probability_of_random_action:
 		new_action[0] = random.uniform(0, max_servo_speed_value)
 		new_action[1] = random.uniform(0, max_servo_speed_value)
+		#print new_action
 	else:
 		readout_t = session.run(output_layer, feed_dict={input_layer: [last_state]})
+		print readout_t
 		r1 = np.asarray(readout_t)
 		r1 = np.reshape(r1, (2))
 		if np.isnan(r1[0]) == True:
 			r1[0] = 0
 		if np.isnan(r1[1]) == True:
 			r1[1] = 0
-		new_action = r1
 		
+		if r1[0] > 400:
+			r1[0] = 400
+			print("r1[0] action too high")
+		if r1[1] > 400:
+			r1[1] = 400
+			print("r1[1] action too high")
+
+		# ??? to prevent that the output_layer is producing NaN	
 		if (r1[0] < 0):
 			r1[0] = 0
 		if (r1[1] < 0):
 			r1[1] = 0
-			print("a2", new_action)
+			#print("a2", new_action)
 		#action_index = np.argmax(readout_t)
+		new_action = r1
 	
 	return new_action
 
@@ -122,18 +132,17 @@ def do_action(action):
 	global force_1_goal
 	global current_degree
 
-
 	#if >= 200 means, servo direction forward, <200 means backward direction
 	if action[0] >= 200:
 		a = action[0] - 200
 		current_degree += a
 	elif action[0] < 200:
-		current_degree += (action[0] * -1)
+		current_degree -= action[0]
 	elif action[1] >= 200:
 		a = action[1] - 200
 		current_degree += a
 	elif action[1] < 200:
-		current_degree += (action[1] * -1)
+		current_degree -= action[1]
 
 	#end blocker
 	if current_degree > 263:
@@ -157,8 +166,8 @@ def train(observations):
 
         agents_reward_per_action = session.run(output_layer, feed_dict={input_layer: current_states})
 
-	print agents_reward_per_action.shape
-	print len(agents_reward_per_action)
+	#print agents_reward_per_action.shape
+	#print len(agents_reward_per_action)
 	for i in range(len(agents_reward_per_action)):
 		if np.isnan(agents_reward_per_action[i][0]) == True:
 			print "NNNNNNNNNNNNNNAAAAAAAAAAAANNNNNNNNNNN"
@@ -314,7 +323,7 @@ try:
 			for i in range(10000):
 				observations.popleft()
 
-		print len(observations)
+		#print len(observations)
 		if len(observations) % OBSERVATION_STEPS == 0:
 			train(observations)
 
@@ -326,6 +335,9 @@ try:
 			print("MAX REWARD -------- NEW DEGREE GOAL")
 			global train_play_loop
 			global probability_of_random_action
+			
+			print probability_of_random_action
+			print train_play_loop
 
 			if train_play_loop == 0:
 				t = raw_input("train or play? input 0 for play, number for how often it train and find degree_goal")
@@ -340,9 +352,11 @@ try:
 					global display_game
 					display_game = raw_input("display game: y or n")
 					print display_game
+					train_play_loop = 1 #just to decrease it some steps later to 0 and not a negative number
 				else:
 					degree_goal = random.randint(0, (max_degree-1) )
 					train_play_loop = t		
+			train_play_loop -= 1
 
 		do_action(last_action)
 	
