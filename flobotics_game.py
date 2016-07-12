@@ -31,7 +31,7 @@ probability_of_random_action = 1
 max_servo_speed_value = 400  #200 different speeds left, and 200 right
 sum_writer_index = 0
 display_game = "n"	#shows the state image, very slow, so enable after some training to check
-
+train_play_loop = 0
 
 def get_current_state():
 	global current_degree
@@ -76,17 +76,28 @@ def get_reward(current_state):
 	return sum(r)
 
 #we choose a random or learned action
-def choose_next_action(last_action):
+def choose_next_action(last_state):
 	new_action = np.zeros([NUM_ACTIONS])
 	global probability_of_random_action
 	global max_servo_speed_value
+
+	#simple decreaseing
+	probability_of_random_action -= 0.0001
 	
 	if random.random() < probability_of_random_action:
 		new_action[0] = random.uniform(0, max_servo_speed_value)
 		new_action[1] = random.uniform(0, max_servo_speed_value)
+		print("a1", new_action)
 	else:
-		readout_t = self._session.run(self._output_layer, feed_dict={self._input_layer: [self._last_state]})[0]
-            	new_action = readout_t
+		readout_t = session.run(output_layer, feed_dict={input_layer: [last_state]})
+		r1 = np.asarray(readout_t)
+		r1 = np.reshape(r1, (2))
+		if np.isnan(r1[0]) == True:
+			r1[0] = 0
+		if np.isnan(r1[1]) == True:
+			r1[1] = 0
+		new_action = r1
+		print("a2", new_action)
 		#action_index = np.argmax(readout_t)
 	
 	return new_action
@@ -106,6 +117,7 @@ def max_pool_2x2(x):
 def do_action(action):
 	global force_1_goal
 	global current_degree
+
 
 	#if >= 200 means, servo direction forward, <200 means backward direction
 	if action[0] >= 200:
@@ -140,6 +152,17 @@ def train(observations):
 	agents_expected_reward = []
 
         agents_reward_per_action = session.run(output_layer, feed_dict={input_layer: current_states})
+
+	print agents_reward_per_action.shape
+	print len(agents_reward_per_action)
+	for i in range(len(agents_reward_per_action)):
+		if np.isnan(agents_reward_per_action[i][0]) == True:
+			print "NNNNNNNNNNNNNNAAAAAAAAAAAANNNNNNNNNNN"
+			agents_reward_per_action[i][0] = 0
+		if np.isnan(agents_reward_per_action[i][1]) == True:
+			print "NNNNNNNNNNNNAAAAANNNNNNNNNNNNNNNN"
+			agents_reward_per_action[i][1] = 0
+
         for i in range(len(mini_batch)):
         	agents_expected_reward.append(rewards[i] + FUTURE_REWARD_DISCOUNT * np.max(agents_reward_per_action[i]))
 
@@ -297,14 +320,25 @@ try:
 		#if we got the max reward, we change degree_goal mostly, perhaps sometimes force_1/2_goal
 		if reward == 3:
 			print("MAX REWARD -------- NEW DEGREE GOAL")
-			#degree_goal = random.randint(0, (max_degree-1) )
-			nb = raw_input("new degree_goal:")
-			degree_goal = int(nb)
-			print degree_goal
-			global display_game
-			display_game = raw_input("display game: y or n")
-			print display_game
-			
+			global train_play_loop
+			global probability_of_random_action
+
+			if train_play_loop == 0:
+				t = raw_input("train or play? input 0 for play, number for how often it train and find degree_goal")
+				t = int(t)
+				if t == 0:
+					nb = raw_input("new degree_goal:")
+					degree_goal = int(nb)
+					print degree_goal
+					nb = raw_input("new probability of choosing random action:0.0-1.0")
+					probability_of_random_action = float(nb)
+					print probability_of_random_action
+					global display_game
+					display_game = raw_input("display game: y or n")
+					print display_game
+				else:
+					degree_goal = random.randint(0, (max_degree-1) )
+					train_play_loop = t		
 
 		do_action(last_action)
 	
