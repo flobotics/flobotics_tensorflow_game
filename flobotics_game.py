@@ -12,16 +12,16 @@ current_degree = 0
 max_force = 1024
 force_1_goal = 20
 force_2_goal = 20
-current_force_1 = 0
-current_force_2 = 0
+current_force_1 = 20
+current_force_2 = 20
 
 
 STATE_FRAMES = 4
 NUM_ACTIONS = 2  #two speed values for two servos
 NUM_STATES = 4624 # (2*max_degree) + (4*max_force)
-MEMORY_SIZE = 10000
-OBSERVATION_STEPS = 10
-MINI_BATCH_SIZE = 5
+MEMORY_SIZE = 40000
+OBSERVATION_STEPS = 1000
+MINI_BATCH_SIZE = 100
 RESIZED_DATA_X = 68  #NUM_STATES resized to 68x68
 RESIZED_DATA_Y = 68
 FUTURE_REWARD_DISCOUNT = 0.9
@@ -29,7 +29,7 @@ FUTURE_REWARD_DISCOUNT = 0.9
 
 probability_of_random_action = 1
 max_servo_speed_value = 400  #200 different speeds left, and 200 right
-
+sum_writer_index = 0
 
 
 
@@ -107,18 +107,17 @@ def do_action(action):
 	global force_1_goal
 	global current_degree
 
+	#if >= 200 means, servo direction forward, <200 means backward direction
 	if action[0] >= 200:
 		a = action[0] - 200
-		a = a * -1
 		current_degree += a
 	elif action[0] < 200:
-		current_degree += action[0]
+		current_degree += (action[0] * -1)
 	elif action[1] >= 200:
 		a = action[1] - 200
-		a = a * -1
 		current_degree += a
 	elif action[1] < 200:
-		current_degree += action[1]
+		current_degree += (action[1] * -1)
 
 	#end blocker
 	if current_degree > 263:
@@ -129,6 +128,9 @@ def do_action(action):
 	
 
 def train(observations):
+	print("train")
+	global sum_writer_index
+
 	mini_batch = random.sample(observations, MINI_BATCH_SIZE)
 	previous_states = [d[0] for d in mini_batch]
         actions = [d[1] for d in mini_batch]
@@ -142,7 +144,8 @@ def train(observations):
         	agents_expected_reward.append(rewards[i] + FUTURE_REWARD_DISCOUNT * np.max(agents_reward_per_action[i]))
 
 	_, result = session.run([train_operation, merged], feed_dict={input_layer: previous_states, action : actions, target: agents_expected_reward})
-
+	sum_writer.add_summary(result, sum_writer_index)
+	sum_writer_index += 1
 
 
 
@@ -234,54 +237,73 @@ sum_writer = tf.train.SummaryWriter('/tmp/train', session.graph)
 train_operation = tf.train.AdamOptimizer(0.1).minimize(loss)
 
 session.run(tf.initialize_all_variables())
+saver = tf.train.Saver()
+
 
 
 
 ########### end create network
 
-plt.ion()  #to update the matplot image ???
+#plt.ion()  #to update the matplot image ???
 
-while True:
-	print("test if it loops or blocks")
-	state_from_env = get_current_state()
-	reward = get_reward(state_from_env)
+#state_image = np.zeros([68,68])
+#state_image_data = plt.imshow(state_image)
+#plt.show(block=False)
+#plt.show()
+#plt.draw()
 
-	#here we simply plot the state as image, so we can see the "game" while playing
-	state_image = np.reshape(state_from_env, (68,68))
-	plt.imshow(state_image)
-	plt.show(block=False) 
-	plt.draw()
+try:
+	while True:
+		#print("test if it loops or blocks")
+		state_from_env = get_current_state()
+		reward = get_reward(state_from_env)
 
-	#if we run for the first time, we build a state
-	if first_time == 1:
-		first_time = 0
-		last_state = np.stack(tuple(state_from_env for _ in range(STATE_FRAMES)), axis=2)
-		last_action = np.zeros([NUM_ACTIONS])  #speeed of both servos 0
-		#do_action() which does nothing
-
-
-	state_from_env = state_from_env.reshape(68,68,1)
-	current_state = np.append(last_state[:,:,1:], state_from_env, axis=2)
-
-	observations.append((last_state, last_action, reward, current_state))	
-
-	if len(observations) > MEMORY_SIZE:
-		observations.popleft()
-
-	if len(observations) > OBSERVATION_STEPS:
-		train(observations)
-
-	last_state = current_state
-	last_action = choose_next_action(last_state)
-
-	#if we got the max reward, we change degree_goal mostly, perhaps sometimes force_1/2_goal
-	if reward == 3:
-		degree_goal = random.randint(0, (max_degree-1) )
-
-	do_action(last_action)
+		#here we simply plot the state as image, so we can see the "game" while playing
+		# VERY SLOW UPDATE
+		#state_image = np.reshape(state_from_env, (68,68))
+		#plt.imshow(state_image)
+		#plt.show(block=False) 
+		#state_image_data.set_data(state_image)
+		#plt.draw()
+		#plt.show()
+		#state_image_data.update()
+	
+		#if we run for the first time, we build a state
+		if first_time == 1:
+			first_time = 0
+			last_state = np.stack(tuple(state_from_env for _ in range(STATE_FRAMES)), axis=2)
+			last_action = np.zeros([NUM_ACTIONS])  #speeed of both servos 0
+			#do_action() which does nothing
 
 
+		state_from_env = state_from_env.reshape(68,68,1)
+		current_state = np.append(last_state[:,:,1:], state_from_env, axis=2)
 
+		observations.append((last_state, last_action, reward, current_state))	
+
+		if len(observations) > MEMORY_SIZE:
+			print("POPLEFT---------------------")
+			for i in range(10000):
+				observations.popleft()
+
+		print len(observations)
+		if len(observations) % OBSERVATION_STEPS == 0:
+			train(observations)
+
+		last_state = current_state
+		last_action = choose_next_action(last_state)
+
+		#if we got the max reward, we change degree_goal mostly, perhaps sometimes force_1/2_goal
+		if reward == 3:
+			print("MAX REWARD -------- NEW DEGREE GOAL")
+			degree_goal = random.randint(0, (max_degree-1) )
+
+		do_action(last_action)
+	
+except KeyboardInterrupt:
+	print "save model"
+	save_path = saver.save(session, "/home/ros/tensorflow-models/model-mini.ckpt")
+	session.close()
 
 
 
