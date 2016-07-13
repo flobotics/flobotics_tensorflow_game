@@ -3,8 +3,6 @@ import matplotlib.pyplot as plt
 import random
 from collections import deque
 import tensorflow as tf
-
-###try to display image with tkinter, but mainloop blocks
 import Tkinter
 from PIL import Image, ImageTk
 
@@ -34,13 +32,12 @@ FUTURE_REWARD_DISCOUNT = 0.9
 probability_of_random_action = 1 
 max_servo_speed_value = 400  #200 different speeds left, and 200 right
 sum_writer_index = 0
-display_game = "y"	#shows the state image, very slow, so enable after some training to check
 train_play_loop = 0
 
-##try to display with tkinter, but mainloop blocks
-data = np.array(np.random.random((68,68))*1,dtype=int)
+data = None
 photo = None
-
+root = None
+canvas = None
 
 
 def get_current_state():
@@ -192,8 +189,6 @@ def train(observations):
 
         agents_reward_per_action = session.run(output_layer, feed_dict={input_layer: current_states})
 
-	#print agents_reward_per_action.shape
-	#print len(agents_reward_per_action)
 	for i in range(len(agents_reward_per_action)):
 		if np.isnan(agents_reward_per_action[i][0]) == True:
 			print "NNNNNNNNNNNNNNAAAAAAAAAAAANNNNNNNNNNN"
@@ -209,27 +204,23 @@ def train(observations):
 	sum_writer.add_summary(result, sum_writer_index)
 	sum_writer_index += 1
 
+#Tkinter loop
 def image_loop():
         global data
         global photo
-
-	data = get_current_state()
-	#print a.shape[0]
-	
+	global canvas
+	global root
 
         im=Image.fromstring('L', (data.shape[1],data.shape[0]), data.astype('b').tostring())
         photo = ImageTk.PhotoImage(master = canvas, image=im)
         canvas.create_image(0,0,image=photo,anchor=Tkinter.NW)
         root.update()
 
-        root.after(10,image_loop)
-        #data=np.roll(data,-1,1)
+        root.after(100,image_loop)
 
 
 
 ######  main python program starts here  #####
-
-plt.gray()
 
 observations = deque()
 first_time = 1
@@ -237,15 +228,14 @@ last_state = None
 
 
 #######TK inter 
-#root = Tkinter.Tk()
-#frame = Tkinter.Frame(root, width=68, height=68)
-#frame.pack()
-#canvas = Tkinter.Canvas(frame, width=68,height=68)
+root = Tkinter.Tk()
+frame = Tkinter.Frame(root, width=68, height=68)
+frame.pack()
+canvas = Tkinter.Canvas(frame, width=68,height=68)
 #canvas.place(x=-2,y=-2)
-#root.after(1000,image_loop) # INCREASE THE 0 TO SLOW IT DOWN
-#root.mainloop()
+canvas.place(x=0,y=0)
+root.after(1000,image_loop) # INCREASE THE 0 TO SLOW IT DOWN
 
-#print "GGGGGGGGGGGGGOOO"
 
 #################### create network
 
@@ -334,30 +324,27 @@ saver = tf.train.Saver()
 
 ########### end create network
 
-plt.ion()  #to update the matplot image ???
 
-state_image = np.zeros([68,68])
-state_image_data = plt.imshow(state_image, animated=True)
-plt.show(block=False)
-#plt.show()
-#plt.draw()
+data=np.array(np.random.random((68,68))*100,dtype=int)
+
 
 try:
 	while True:
+		#tkinter update
+		root.update_idletasks()
+		root.update()
+
 		#print("test if it loops or blocks")
 		state_from_env = get_current_state()
 		reward = get_reward(state_from_env)
 
-		#here we simply plot the state as image, so we can see the "game" while playing
-		# VERY SLOW UPDATE
-		if display_game == "y":
-			state_image = np.reshape(state_from_env, (68,68))
-			plt.imshow(state_image)
-			#plt.show(block=False) 
-			#state_image_data.set_data(state_image)
-			plt.draw()
-			#plt.show()
-			#state_image_data.update(state_image)
+		##tkinter update
+		global data
+		#data=np.array(np.random.random((68,68))*100,dtype=int)
+		data=state_from_env
+		#data = np.reshape(state_from_env, (68,68,1))
+		data = data * 255
+
 	
 		#if we run for the first time, we build a state
 		if first_time == 1:
@@ -384,7 +371,7 @@ try:
 		last_action = choose_next_action(last_state)
 
 		#if we got the max reward, we change degree_goal mostly, perhaps sometimes force_1/2_goal
-		if reward == 3:
+		if reward == 1:
 			print("MAX REWARD -------- NEW DEGREE GOAL")
 			global train_play_loop
 			global probability_of_random_action
@@ -402,9 +389,6 @@ try:
 					nb = raw_input("new probability of choosing random action:0.0-1.0")
 					probability_of_random_action = float(nb)
 					print probability_of_random_action
-					global display_game
-					display_game = raw_input("display game: y or n")
-					print display_game
 					train_play_loop = 1 #just to decrease it some steps later to 0 and not a negative number
 				else:
 					degree_goal = random.randint(0, (max_degree-1) )
