@@ -229,11 +229,11 @@ last_state = None
 
 #######TK inter 
 root = Tkinter.Tk()
-frame = Tkinter.Frame(root, width=68, height=68)
+frame = Tkinter.Frame(root, width=75, height=75)
 frame.pack()
-canvas = Tkinter.Canvas(frame, width=68,height=68)
+canvas = Tkinter.Canvas(frame, width=75,height=75)
 #canvas.place(x=-2,y=-2)
-canvas.place(x=0,y=0)
+canvas.place(x=2,y=2)
 root.after(1000,image_loop) # INCREASE THE 0 TO SLOW IT DOWN
 
 
@@ -326,7 +326,7 @@ saver = tf.train.Saver()
 
 
 data=np.array(np.random.random((68,68))*100,dtype=int)
-
+obs = 0
 
 try:
 	while True:
@@ -364,7 +364,10 @@ try:
 			observations.popleft()
 
 		#print len(observations)
-		if len(observations) % OBSERVATION_STEPS == 0:
+		#if len(observations) % OBSERVATION_STEPS == 0:
+		obs += 1
+		if obs > OBSERVATION_STEPS:
+			obs = 0
 			train(observations)
 
 		last_state = current_state
@@ -378,8 +381,10 @@ try:
 			
 			print probability_of_random_action
 			print train_play_loop
+			
+			degree_goal = random.randint(0, (max_degree-1) )
 
-			if train_play_loop == 0:
+			if train_play_loop <= 0:
 				t = raw_input("train or play? input 0 for play, number for how often it train and find degree_goal")
 				t = int(t)
 				if t == 0:
@@ -391,8 +396,8 @@ try:
 					print probability_of_random_action
 					train_play_loop = 1 #just to decrease it some steps later to 0 and not a negative number
 				else:
-					degree_goal = random.randint(0, (max_degree-1) )
-					train_play_loop = t		
+					train_play_loop = t
+					
 			train_play_loop -= 1
 
 		do_action(last_action)
