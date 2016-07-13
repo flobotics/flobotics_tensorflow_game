@@ -4,11 +4,15 @@ import random
 from collections import deque
 import tensorflow as tf
 
+###try to display image with tkinter, but mainloop blocks
+import Tkinter
+from PIL import Image, ImageTk
+
 
 
 max_degree = 264
 degree_goal = 120
-current_degree = 0
+current_degree = 100
 max_force = 1024
 force_1_goal = 20
 force_2_goal = 20
@@ -17,7 +21,7 @@ current_force_2 = 20
 
 
 STATE_FRAMES = 4
-NUM_ACTIONS = 2  #two speed values for two servos
+NUM_ACTIONS = 3  #two speed values for two servos
 NUM_STATES = 4624 # (2*max_degree) + (4*max_force)
 MEMORY_SIZE = 40000
 OBSERVATION_STEPS = 1000
@@ -27,11 +31,17 @@ RESIZED_DATA_Y = 68
 FUTURE_REWARD_DISCOUNT = 0.9
 
 
-probability_of_random_action = 0.5
+probability_of_random_action = 1 
 max_servo_speed_value = 400  #200 different speeds left, and 200 right
 sum_writer_index = 0
-display_game = "n"	#shows the state image, very slow, so enable after some training to check
+display_game = "y"	#shows the state image, very slow, so enable after some training to check
 train_play_loop = 0
+
+##try to display with tkinter, but mainloop blocks
+data = np.array(np.random.random((68,68))*1,dtype=int)
+photo = None
+
+
 
 def get_current_state():
 	global current_degree
@@ -73,7 +83,8 @@ def get_reward(current_state):
 	v = ( max_degree + (2*max_force) )
 	s = np.reshape(current_state, (2, v))
 	r = s[0] * s[1]
-	return sum(r)
+	r = sum(r)-2  #we dont change force, minus these two
+	return r
 
 #we choose a random or learned action
 def choose_next_action(last_state):
@@ -85,34 +96,37 @@ def choose_next_action(last_state):
 	probability_of_random_action -= 0.000001
 	
 	if random.random() < probability_of_random_action:
-		new_action[0] = random.uniform(0, max_servo_speed_value)
-		new_action[1] = random.uniform(0, max_servo_speed_value)
+		#new_action[0] = random.uniform(0, max_servo_speed_value)
+		#new_action[1] = random.uniform(0, max_servo_speed_value)
+		new_action_index = random.randint(0,2)
+		new_action[new_action_index] = 1
 		#print new_action
 	else:
 		readout_t = session.run(output_layer, feed_dict={input_layer: [last_state]})
-		print readout_t
+		#print readout_t
 		r1 = np.asarray(readout_t)
-		r1 = np.reshape(r1, (2))
-		if np.isnan(r1[0]) == True:
-			r1[0] = 0
-		if np.isnan(r1[1]) == True:
-			r1[1] = 0
-		
-		if r1[0] > 400:
-			r1[0] = 400
-			print("r1[0] action too high")
-		if r1[1] > 400:
-			r1[1] = 400
-			print("r1[1] action too high")
-
-		# ??? to prevent that the output_layer is producing NaN	
-		if (r1[0] < 0):
-			r1[0] = 0
-		if (r1[1] < 0):
-			r1[1] = 0
-			#print("a2", new_action)
-		#action_index = np.argmax(readout_t)
-		new_action = r1
+		r1 = np.reshape(r1, (NUM_ACTIONS))
+#		if np.isnan(r1[0]) == True:
+#			r1[0] = 0
+#		if np.isnan(r1[1]) == True:
+#			r1[1] = 0
+#		
+#		if r1[0] > 400:
+#			r1[0] = 400
+#			print("r1[0] action too high")
+#		if r1[1] > 400:
+#			r1[1] = 400
+#			print("r1[1] action too high")
+#
+#		# ??? to prevent that the output_layer is producing NaN	
+#		if (r1[0] < 0):
+#			r1[0] = 0
+#		if (r1[1] < 0):
+#			r1[1] = 0
+#			#print("a2", new_action)
+		action_index = np.argmax(readout_t)
+		new_action[action_index] = 1
+		#print new_action
 	
 	return new_action
 
@@ -133,22 +147,34 @@ def do_action(action):
 	global current_degree
 
 	#if >= 200 means, servo direction forward, <200 means backward direction
-	if action[0] >= 200:
-		a = action[0] - 200
-		current_degree += a
-	elif action[0] < 200:
-		current_degree -= action[0]
-	elif action[1] >= 200:
-		a = action[1] - 200
-		current_degree += a
-	elif action[1] < 200:
-		current_degree -= action[1]
+#	if action[0] >= 200:
+#		a = action[0] - 200
+#		current_degree += a
+#	elif action[0] < 200:
+#		current_degree -= action[0]
+#	elif action[1] >= 200:
+#		a = action[1] - 200
+#		current_degree += a
+#	elif action[1] < 200:
+#		current_degree -= action[1]
+#
+#	#end blocker
+#	if current_degree > 263:
+#		current_degree = 263
+#	elif current_degree < 0:
+#		current_degree = 0
+	
+	if action[0] == 1:
+		current_degree = current_degree
+	if action[1] == 1:
+		current_degree += 1
+	if action[2] == 1:
+		current_degree -= 1
 
-	#end blocker
 	if current_degree > 263:
-		current_degree = 263
-	elif current_degree < 0:
-		current_degree = 0
+        	current_degree = 263
+        elif current_degree < 0:
+        	current_degree = 0
 
 	
 
@@ -183,6 +209,22 @@ def train(observations):
 	sum_writer.add_summary(result, sum_writer_index)
 	sum_writer_index += 1
 
+def image_loop():
+        global data
+        global photo
+
+	data = get_current_state()
+	#print a.shape[0]
+	
+
+        im=Image.fromstring('L', (data.shape[1],data.shape[0]), data.astype('b').tostring())
+        photo = ImageTk.PhotoImage(master = canvas, image=im)
+        canvas.create_image(0,0,image=photo,anchor=Tkinter.NW)
+        root.update()
+
+        root.after(10,image_loop)
+        #data=np.roll(data,-1,1)
+
 
 
 ######  main python program starts here  #####
@@ -192,6 +234,18 @@ plt.gray()
 observations = deque()
 first_time = 1
 last_state = None
+
+
+#######TK inter 
+#root = Tkinter.Tk()
+#frame = Tkinter.Frame(root, width=68, height=68)
+#frame.pack()
+#canvas = Tkinter.Canvas(frame, width=68,height=68)
+#canvas.place(x=-2,y=-2)
+#root.after(1000,image_loop) # INCREASE THE 0 TO SLOW IT DOWN
+#root.mainloop()
+
+#print "GGGGGGGGGGGGGOOO"
 
 #################### create network
 
@@ -282,9 +336,9 @@ saver = tf.train.Saver()
 
 plt.ion()  #to update the matplot image ???
 
-#state_image = np.zeros([68,68])
-#state_image_data = plt.imshow(state_image)
-#plt.show(block=False)
+state_image = np.zeros([68,68])
+state_image_data = plt.imshow(state_image, animated=True)
+plt.show(block=False)
 #plt.show()
 #plt.draw()
 
@@ -299,11 +353,11 @@ try:
 		if display_game == "y":
 			state_image = np.reshape(state_from_env, (68,68))
 			plt.imshow(state_image)
-			plt.show(block=False) 
+			#plt.show(block=False) 
 			#state_image_data.set_data(state_image)
 			plt.draw()
 			#plt.show()
-			#state_image_data.update()
+			#state_image_data.update(state_image)
 	
 		#if we run for the first time, we build a state
 		if first_time == 1:
@@ -319,9 +373,8 @@ try:
 		observations.append((last_state, last_action, reward, current_state))	
 
 		if len(observations) > MEMORY_SIZE:
-			print("POPLEFT---------------------")
-			for i in range(10000):
-				observations.popleft()
+			#print("POPLEFT---------------------")
+			observations.popleft()
 
 		#print len(observations)
 		if len(observations) % OBSERVATION_STEPS == 0:
