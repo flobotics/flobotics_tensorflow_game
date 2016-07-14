@@ -5,10 +5,10 @@ from collections import deque
 import tensorflow as tf
 import Tkinter
 from PIL import Image, ImageTk
+import os.path
 
 
-
-max_degree = 264
+max_degree = 200 #264
 degree_goal = 120
 current_degree = 100
 max_force = 1024
@@ -24,12 +24,12 @@ NUM_STATES = 4624 # (2*max_degree) + (4*max_force)
 MEMORY_SIZE = 40000
 OBSERVATION_STEPS = 30000
 MINI_BATCH_SIZE = 100
-RESIZED_DATA_X = 68  #NUM_STATES resized to 68x68
-RESIZED_DATA_Y = 68
+RESIZED_DATA_X = 20 #68  #NUM_STATES resized to 68x68
+RESIZED_DATA_Y = 20 #68
 FUTURE_REWARD_DISCOUNT = 0.9
 
 
-probability_of_random_action = 1 
+probability_of_random_action = 1.0 
 max_servo_speed_value = 400  #200 different speeds left, and 200 right
 sum_writer_index = 0
 train_play_loop = 0
@@ -38,7 +38,7 @@ data = None
 photo = None
 root = None
 canvas = None
-
+not_random = 0
 
 def get_current_state():
 	global current_degree
@@ -51,36 +51,49 @@ def get_current_state():
 	global max_force
 
 
-	a = np.zeros([max_degree])
+#	a = np.zeros([max_degree])
+#	a[current_degree] = 1
+#	b = np.zeros([max_force])
+#	b[current_force_1] = 1
+#	c = np.zeros([max_force])
+#	c[current_force_2] = 1
+#	d = np.zeros([max_degree])
+#	d[degree_goal] = 1
+#	e = np.zeros([max_force])
+#	e[force_1_goal] = 1
+#	f = np.zeros([max_force])
+#	f[force_2_goal] = 1
+#	g = []
+#	g.extend(a)
+#	g.extend(b)
+#	g.extend(c)
+#	g.extend(d)
+#	g.extend(e)
+#	g.extend(f)
+	#h = np.reshape(g, (68,68))
+	#return h
+	a = np.zeros([RESIZED_DATA_X*10])
 	a[current_degree] = 1
-	b = np.zeros([max_force])
-	b[current_force_1] = 1
-	c = np.zeros([max_force])
-	c[current_force_2] = 1
-	d = np.zeros([max_degree])
-	d[degree_goal] = 1
-	e = np.zeros([max_force])
-	e[force_1_goal] = 1
-	f = np.zeros([max_force])
-	f[force_2_goal] = 1
-	g = []
-	g.extend(a)
-	g.extend(b)
-	g.extend(c)
-	g.extend(d)
-	g.extend(e)
-	g.extend(f)
-	h = np.reshape(g, (68,68))
-	return h
+	b = np.zeros([RESIZED_DATA_X*10])
+	b[degree_goal] = 1
+	c = []
+	c.extend(a)
+	c.extend(b)
+	c = np.reshape(c, (20,20))
+	return c
 
 #if we overlay, we get reward
 def get_reward(current_state):
-	global max_degree
-	global max_force
-	v = ( max_degree + (2*max_force) )
-	s = np.reshape(current_state, (2, v))
+#	global max_degree
+#	global max_force
+#	v = ( max_degree + (2*max_force) )
+#	s = np.reshape(current_state, (2, v))
+#	r = s[0] * s[1]
+#	r = sum(r)-2  #we dont change force, minus these two
+#	return r
+	s = np.reshape(current_state, (2, RESIZED_DATA_X*10))
 	r = s[0] * s[1]
-	r = sum(r)-2  #we dont change force, minus these two
+	r = sum(r)
 	return r
 
 #we choose a random or learned action
@@ -90,10 +103,9 @@ def choose_next_action(last_state):
 	global max_servo_speed_value
 
 	#simple decreaseing
-	probability_of_random_action -= 0.000001
-
-	if probability_of_random_action == 0.5:
-		probability_of_random_action = 0.99	
+	if not_random == 1:
+		probability_of_random_action -= 0.000001
+	#print probability_of_random_action
 	
 	if random.random() < probability_of_random_action:
 		#new_action[0] = random.uniform(0, max_servo_speed_value)
@@ -171,8 +183,8 @@ def do_action(action):
 	if action[2] == 1:
 		current_degree -= 1
 
-	if current_degree > 263:
-        	current_degree = 263
+	if current_degree > 199: #263:
+        	current_degree = 199 #263
         elif current_degree < 0:
         	current_degree = 0
 
@@ -257,23 +269,23 @@ with tf.name_scope("conv1") as conv1:
         cw1_image_hist = tf.image_summary("conv1_w", c1)
 
 with tf.name_scope("conv2") as conv2:
-        conv_weights_2 = weight_variable([4,4,32,64], "conv2_weights")
+        conv_weights_2 = weight_variable([3,3,32,64], "conv2_weights")
         conv_biases_2 = bias_variable([64], "conv2_biases")
         cw2_hist = tf.histogram_summary("conv2/weights", conv_weights_2)
         cb2_hist = tf.histogram_summary("conv2/biases", conv_biases_2)
-        c2 = tf.reshape(conv_weights_2, [32,64,4,4])
+        c2 = tf.reshape(conv_weights_2, [32,64,3,3])
         cw2_image_hist = tf.image_summary("conv2_w", c2)
 
 with tf.name_scope("conv3") as conv3:
-        conv_weights_3 = weight_variable([3,3,64,64], "conv3_weights")
+        conv_weights_3 = weight_variable([1,1,64,64], "conv3_weights")
         conv_biases_3 = bias_variable([64], "conv3_biases")
         cw3_hist = tf.histogram_summary("conv3/weights", conv_weights_3)
         cb3_hist = tf.histogram_summary("conv3/biases", conv_biases_3)
-        c3 = tf.reshape(conv_weights_3, [64,64,3,3])
+        c3 = tf.reshape(conv_weights_3, [64,64,1,1])
         cw3_image_hist = tf.image_summary("conv3_w", c3)
 
 with tf.name_scope("fc_1") as fc_1:
-        fc1_weights = weight_variable([2*2*64, 4624], "fc1_weights")
+        fc1_weights = weight_variable([1*1*64, 4624], "fc1_weights")
         fc1_biases = bias_variable([4624], "fc1_biases")
         fc1_b_hist = tf.histogram_summary("fc_1/biases", fc1_biases)
         fc1_w_hist = tf.histogram_summary("fc_1/weights", fc1_weights)
@@ -294,9 +306,10 @@ h_pool2 = max_pool_2x2(h_conv2)
 
 
 h_conv3 = tf.nn.relu(tf.nn.conv2d(h_pool2, conv_weights_3, strides=[1,1,1,1], padding="SAME") + conv_biases_3)
-h_pool3 = max_pool_2x2(h_conv3)
+#h_pool3 = max_pool_2x2(h_conv3)
+h_pool3 = tf.nn.max_pool(h_conv3, ksize=[1,1,1,1], strides=[1,1,1,1], padding='SAME')
 
-h_pool3_flat = tf.reshape(h_pool3, [-1,2*2*64])
+h_pool3_flat = tf.reshape(h_pool3, [-1,1*1*64])
 final_hidden_activation = tf.nn.relu(tf.matmul(h_pool3_flat, fc1_weights, name='final_hidden_activation') + fc1_biases)
 
 output_layer = tf.matmul(final_hidden_activation, fc2_weights) + fc2_biases
@@ -322,13 +335,15 @@ train_operation = tf.train.AdamOptimizer(0.1).minimize(loss)
 session.run(tf.initialize_all_variables())
 saver = tf.train.Saver()
 
-
+if os.path.isfile("/home/ros/tensorflow-models/model-mini.ckpt"):
+	saver.restore(session, "/home/ros/tensorflow-models/model-mini.ckpt")
+	print "model restored"
 
 
 ########### end create network
 
 
-data=np.array(np.random.random((68,68))*100,dtype=int)
+data=np.array(np.random.random((RESIZED_DATA_X, RESIZED_DATA_Y))*100,dtype=int)
 obs = 0
 
 try:
@@ -357,7 +372,7 @@ try:
 			#do_action() which does nothing
 
 
-		state_from_env = state_from_env.reshape(68,68,1)
+		state_from_env = state_from_env.reshape(RESIZED_DATA_X, RESIZED_DATA_Y, 1)
 		current_state = np.append(last_state[:,:,1:], state_from_env, axis=2)
 
 		observations.append((last_state, last_action, reward, current_state))	
@@ -382,14 +397,15 @@ try:
 			print("MAX REWARD -------- NEW DEGREE GOAL")
 			global train_play_loop
 			global probability_of_random_action
-			
+			global not_random
+
 			print probability_of_random_action
 			print train_play_loop
 			
 			degree_goal = random.randint(0, (max_degree-1) )
 
 			if train_play_loop <= 0:
-				t = raw_input("train or play? input 0 for play, number for how often it train and find degree_goal")
+				t = raw_input("train or play? input 0 for play, number for how often it train and find degree_goal: ")
 				t = int(t)
 				if t == 0:
 					nb = raw_input("new degree_goal: ")
@@ -398,6 +414,9 @@ try:
 					nb = raw_input("new probability of choosing random action: 0.0-1.0 : ")
 					probability_of_random_action = float(nb)
 					print probability_of_random_action
+					nr = raw_input("random or not 0 or 1 : ")
+					not_random = int(nr)
+					print not_random
 					train_play_loop = 1 #just to decrease it some steps later to 0 and not a negative number
 				else:
 					train_play_loop = t
