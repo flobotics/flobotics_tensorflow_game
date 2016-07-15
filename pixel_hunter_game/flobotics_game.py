@@ -29,7 +29,7 @@ RESIZED_DATA_Y = 20 #68
 FUTURE_REWARD_DISCOUNT = 0.9
 
 
-probability_of_random_action = 1.0 
+probability_of_random_action = 0.8 
 max_servo_speed_value = 400  #200 different speeds left, and 200 right
 sum_writer_index = 0
 train_play_loop = 0
@@ -80,7 +80,7 @@ def choose_next_action(last_state):
 	#simple decreaseing
 	if not_random == 1:
 		random_loop += 1
-		if random_loop >= 1000:
+		if random_loop >= 100:
 			probability_of_random_action -= 0.00001
 			random_loop = 0
 
@@ -168,7 +168,7 @@ def image_loop():
 
         im=Image.fromstring('L', (data.shape[1],data.shape[0]), data.astype('b').tostring())
         photo = ImageTk.PhotoImage(master = canvas, image=im)
-        canvas.create_image(0,0,image=photo,anchor=Tkinter.NW)
+        canvas.create_image(10,10,image=photo,anchor=Tkinter.NW)
         root.update()
 
         root.after(100,image_loop)
@@ -188,7 +188,7 @@ frame = Tkinter.Frame(root, width=75, height=75)
 frame.pack()
 canvas = Tkinter.Canvas(frame, width=75,height=75)
 #canvas.place(x=-2,y=-2)
-canvas.place(x=2,y=2)
+canvas.place(x=-2,y=-2)
 root.after(1000,image_loop) # INCREASE THE 0 TO SLOW IT DOWN
 
 
@@ -326,6 +326,9 @@ try:
 			obs = 0
 			for i in range(OBSERVATION_STEPS/MINI_BATCH_SIZE):
 				train(observations)
+		
+			print "save model"
+		        save_path = saver.save(session, "/home/ros/tensorflow-models/model-mini.ckpt")
 
 		last_state = current_state
 		last_action = choose_next_action(last_state)
