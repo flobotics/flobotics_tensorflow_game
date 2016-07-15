@@ -29,7 +29,7 @@ RESIZED_DATA_Y = 20 #68
 FUTURE_REWARD_DISCOUNT = 0.9
 
 
-probability_of_random_action = 0.8 
+probability_of_random_action = 1.0 
 max_servo_speed_value = 400  #200 different speeds left, and 200 right
 sum_writer_index = 0
 train_play_loop = 0
@@ -237,16 +237,37 @@ with tf.name_scope("fc_2") as fc_2:
         fc2_b_hist = tf.histogram_summary("fc_2/biases", fc2_biases)
 
 input_layer = tf.placeholder("float", [None, RESIZED_DATA_X, RESIZED_DATA_Y, STATE_FRAMES])
+l2n_input_layer = tf.nn.l2_normalize(input_layer, 0)
 
-h_conv1 = tf.nn.relu(tf.nn.conv2d(input_layer, conv_weights_1, strides=[1, 4, 4, 1], padding="SAME") + conv_biases_1)
-h_pool1 = max_pool_2x2(h_conv1)
+h_conv1 = tf.nn.relu(tf.nn.conv2d(l2n_input_layer, conv_weights_1, strides=[1, 4, 4, 1], padding="SAME") + conv_biases_1)
+
+#batch normalization
+bn_conv1_mean, bn_conv1_variance = tf.nn.moments(h_conv1,[0,1,2,3])
+bn_conv1_scale = tf.Variable(tf.ones([32]))
+bn_conv1_offset = tf.Variable(tf.zeros([32]))
+bn_conv1_epsilon = 1e-3
+bn_conv1 = tf.nn.batch_normalization(h_conv1, bn_conv1_mean, bn_conv1_variance, bn_conv1_offset, bn_conv1_scale, bn_conv1_epsilon)
+
+#h_conv1 = tf.nn.relu(tf.nn.conv2d(input_layer, conv_weights_1, strides=[1, 4, 4, 1], padding="SAME") + conv_biases_1)
+#h_pool1 = max_pool_2x2(h_conv1)
+h_pool1 = max_pool_2x2(bn_conv1)
 
 h_conv2 = tf.nn.relu(tf.nn.conv2d(h_pool1, conv_weights_2, strides=[1, 2, 2, 1], padding="SAME") + conv_biases_2)
+bn_conv2_mean, bn_conv2_variance = tf.nn.moments(h_conv2, [0,1,2,3])
+bn_conv2_scale = tf.Variable(tf.ones([64]))
+bn_conv2_offset = tf.Variable(tf.zeros([64]))
+bn_conv2_epsilon = 1e-3
+bn_conv2 = tf.nn.batch_normalization(h_conv2, bn_conv2_mean, bn_conv2_variance, bn_conv2_offset, bn_conv2_scale, bn_conv2_epsilon)
+
 h_pool2 = max_pool_2x2(h_conv2)
 
 
 h_conv3 = tf.nn.relu(tf.nn.conv2d(h_pool2, conv_weights_3, strides=[1,1,1,1], padding="SAME") + conv_biases_3)
-#h_pool3 = max_pool_2x2(h_conv3)
+bn_conv3_mean, bn_conv3_variance = tf.nn.moments(h_conv3, [0,1,2,3])
+bn_conv3_scale = tf.Variable(tf.ones([64]))
+bn_conv3_offset = tf.Variable(tf.zeros([64]))
+bn_conv3_epsilon = 1e-3
+
 h_pool3 = tf.nn.max_pool(h_conv3, ksize=[1,1,1,1], strides=[1,1,1,1], padding='SAME')
 
 h_pool3_flat = tf.reshape(h_pool3, [-1,1*1*64])
@@ -311,6 +332,7 @@ try:
 
 
 		state_from_env = state_from_env.reshape(RESIZED_DATA_X, RESIZED_DATA_Y, 1)
+		#state_from_env = np.linalg.norm(state_from_env)
 		current_state = np.append(last_state[:,:,1:], state_from_env, axis=2)
 
 		observations.append((last_state, last_action, reward, current_state))	
