@@ -21,8 +21,8 @@ current_force_2 = 20
 STATE_FRAMES = 4
 NUM_ACTIONS = 3  #two speed values for two servos
 NUM_STATES = 4624 # (2*max_degree) + (4*max_force)
-MEMORY_SIZE = 40000
-OBSERVATION_STEPS = 30000
+MEMORY_SIZE = 300000
+OBSERVATION_STEPS = 300000
 MINI_BATCH_SIZE = 100
 RESIZED_DATA_X = 20 #68  #NUM_STATES resized to 68x68
 RESIZED_DATA_Y = 20 #68
@@ -38,8 +38,10 @@ data = None
 photo = None
 root = None
 canvas = None
-not_random = 0
+not_random = 1
+random_loop = 0
 
+#build a 20x20 array with two pixels with value 1, all other value 0
 def get_current_state():
 	global current_degree
 	global current_force_1
@@ -50,28 +52,6 @@ def get_current_state():
 	global max_degree
 	global max_force
 
-
-#	a = np.zeros([max_degree])
-#	a[current_degree] = 1
-#	b = np.zeros([max_force])
-#	b[current_force_1] = 1
-#	c = np.zeros([max_force])
-#	c[current_force_2] = 1
-#	d = np.zeros([max_degree])
-#	d[degree_goal] = 1
-#	e = np.zeros([max_force])
-#	e[force_1_goal] = 1
-#	f = np.zeros([max_force])
-#	f[force_2_goal] = 1
-#	g = []
-#	g.extend(a)
-#	g.extend(b)
-#	g.extend(c)
-#	g.extend(d)
-#	g.extend(e)
-#	g.extend(f)
-	#h = np.reshape(g, (68,68))
-	#return h
 	a = np.zeros([RESIZED_DATA_X*10])
 	a[current_degree] = 1
 	b = np.zeros([RESIZED_DATA_X*10])
@@ -83,14 +63,8 @@ def get_current_state():
 	return c
 
 #if we overlay, we get reward
+#we reshape into two arrays, first array is the pixel which can be moved, the second array is the goal
 def get_reward(current_state):
-#	global max_degree
-#	global max_force
-#	v = ( max_degree + (2*max_force) )
-#	s = np.reshape(current_state, (2, v))
-#	r = s[0] * s[1]
-#	r = sum(r)-2  #we dont change force, minus these two
-#	return r
 	s = np.reshape(current_state, (2, RESIZED_DATA_X*10))
 	r = s[0] * s[1]
 	r = sum(r)
@@ -100,42 +74,26 @@ def get_reward(current_state):
 def choose_next_action(last_state):
 	new_action = np.zeros([NUM_ACTIONS])
 	global probability_of_random_action
-	global max_servo_speed_value
+	global random_loop
+	global not_random
 
 	#simple decreaseing
 	if not_random == 1:
-		probability_of_random_action -= 0.000001
+		random_loop += 1
+		if random_loop >= 1000:
+			probability_of_random_action -= 0.00001
+			random_loop = 0
+
 	#print probability_of_random_action
 	
 	if random.random() < probability_of_random_action:
-		#new_action[0] = random.uniform(0, max_servo_speed_value)
-		#new_action[1] = random.uniform(0, max_servo_speed_value)
 		new_action_index = random.randint(0,2)
 		new_action[new_action_index] = 1
 		#print new_action
 	else:
 		readout_t = session.run(output_layer, feed_dict={input_layer: [last_state]})
-		#print readout_t
 		r1 = np.asarray(readout_t)
 		r1 = np.reshape(r1, (NUM_ACTIONS))
-#		if np.isnan(r1[0]) == True:
-#			r1[0] = 0
-#		if np.isnan(r1[1]) == True:
-#			r1[1] = 0
-#		
-#		if r1[0] > 400:
-#			r1[0] = 400
-#			print("r1[0] action too high")
-#		if r1[1] > 400:
-#			r1[1] = 400
-#			print("r1[1] action too high")
-#
-#		# ??? to prevent that the output_layer is producing NaN	
-#		if (r1[0] < 0):
-#			r1[0] = 0
-#		if (r1[1] < 0):
-#			r1[1] = 0
-#			#print("a2", new_action)
 		action_index = np.argmax(readout_t)
 		new_action[action_index] = 1
 		#print new_action
@@ -154,28 +112,10 @@ def max_pool_2x2(x):
 	return tf.nn.max_pool(x, ksize=[1,2,2,1], strides=[1,2,2,1], padding='SAME')
 
 # here we do the action, which means, change the game environment (state)
+# we can only stop, go one pixel right or left
 def do_action(action):
-	global force_1_goal
 	global current_degree
 
-	#if >= 200 means, servo direction forward, <200 means backward direction
-#	if action[0] >= 200:
-#		a = action[0] - 200
-#		current_degree += a
-#	elif action[0] < 200:
-#		current_degree -= action[0]
-#	elif action[1] >= 200:
-#		a = action[1] - 200
-#		current_degree += a
-#	elif action[1] < 200:
-#		current_degree -= action[1]
-#
-#	#end blocker
-#	if current_degree > 263:
-#		current_degree = 263
-#	elif current_degree < 0:
-#		current_degree = 0
-	
 	if action[0] == 1:
 		current_degree = current_degree
 	if action[1] == 1:
@@ -191,7 +131,7 @@ def do_action(action):
 	
 
 def train(observations):
-	print("train")
+	#print("train")
 	global sum_writer_index
 
 	mini_batch = random.sample(observations, MINI_BATCH_SIZE)
@@ -358,10 +298,8 @@ try:
 
 		##tkinter update
 		global data
-		#data=np.array(np.random.random((68,68))*100,dtype=int)
 		data=state_from_env
-		#data = np.reshape(state_from_env, (68,68,1))
-		data = data * 255
+		data = data * 255 #the value 1 * 255=255 => white pixel to see
 
 	
 		#if we run for the first time, we build a state
