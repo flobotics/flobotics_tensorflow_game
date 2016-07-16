@@ -20,13 +20,13 @@ current_force_2 = 20
 
 STATE_FRAMES = 4
 NUM_ACTIONS = 3  #two speed values for two servos
-NUM_STATES = 4624 # (2*max_degree) + (4*max_force)
+NUM_STATES = 400 #4624 # (2*max_degree) + (4*max_force)
 MEMORY_SIZE = 300000
-OBSERVATION_STEPS = 300000
-MINI_BATCH_SIZE = 100
+OBSERVATION_STEPS = 100
+MINI_BATCH_SIZE = 20
 RESIZED_DATA_X = 20 #68  #NUM_STATES resized to 68x68
 RESIZED_DATA_Y = 20 #68
-FUTURE_REWARD_DISCOUNT = 0.9
+FUTURE_REWARD_DISCOUNT = 0.99
 
 
 probability_of_random_action = 1.0 
@@ -289,9 +289,9 @@ with tf.name_scope("loss_summary"):
 
 merged = tf.merge_all_summaries()
 
-sum_writer = tf.train.SummaryWriter('/tmp/train', session.graph)
+sum_writer = tf.train.SummaryWriter('/tmp/train/c/', session.graph)
 
-train_operation = tf.train.AdamOptimizer(0.1).minimize(loss)
+train_operation = tf.train.AdamOptimizer(0.0001).minimize(loss)
 
 session.run(tf.initialize_all_variables())
 saver = tf.train.Saver()
@@ -322,6 +322,7 @@ try:
 		data=state_from_env
 		data = data * 255 #the value 1 * 255=255 => white pixel to see
 
+		state_from_env = ((state_from_env * 255) / 128)
 	
 		#if we run for the first time, we build a state
 		if first_time == 1:
@@ -346,10 +347,10 @@ try:
 		obs += 1
 		if obs > OBSERVATION_STEPS:
 			obs = 0
-			for i in range(OBSERVATION_STEPS/MINI_BATCH_SIZE):
-				train(observations)
+			#for i in range(OBSERVATION_STEPS/MINI_BATCH_SIZE):
+			train(observations)
 		
-			print "save model"
+			#print "save model"
 		        save_path = saver.save(session, "/home/ros/tensorflow-models/model-mini.ckpt")
 
 		last_state = current_state
