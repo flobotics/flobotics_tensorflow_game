@@ -6,33 +6,29 @@ import tensorflow as tf
 import Tkinter
 from PIL import Image, ImageTk
 import os.path
+import time
 
 
-max_degree = 200 #264
-degree_goal = 120
-current_degree = 100
-max_force = 1024
-force_1_goal = 20
-force_2_goal = 20
-current_force_1 = 20
-current_force_2 = 20
+max_degree = 200 
+degree_goal = 30 
+current_degree = 10 
 
 
 STATE_FRAMES = 4
-NUM_ACTIONS = 3  #two speed values for two servos
-NUM_STATES = 400 #4624 # (2*max_degree) + (4*max_force)
-MEMORY_SIZE = 300000
-OBSERVATION_STEPS = 100
-MINI_BATCH_SIZE = 20
-RESIZED_DATA_X = 20 #68  #NUM_STATES resized to 68x68
-RESIZED_DATA_Y = 20 #68
-FUTURE_REWARD_DISCOUNT = 0.99
+NUM_ACTIONS = 3  #stop,left,right 
+NUM_STATES = 400 
+MEMORY_SIZE = 3000
+OBSERVATION_STEPS = 1000
+MINI_BATCH_SIZE = 100
+
+RESIZED_DATA_X = 20  #NUM_STATES resized to 20x20
+RESIZED_DATA_Y = 20 
+FUTURE_REWARD_DISCOUNT = 0.9
 
 
-probability_of_random_action = 1.0 
-max_servo_speed_value = 400  #200 different speeds left, and 200 right
+probability_of_random_action = 0.01 
 sum_writer_index = 0
-train_play_loop = 0
+train_play_loop = 10
 
 data = None
 photo = None
@@ -40,17 +36,12 @@ root = None
 canvas = None
 not_random = 1
 random_loop = 0
+delayer = 0
 
 #build a 20x20 array with two pixels with value 1, all other value 0
 def get_current_state():
 	global current_degree
-	global current_force_1
-	global current_force_2
 	global degree_goal
-	global force_1_goal
-	global force_2_goal
-	global max_degree
-	global max_force
 
 	a = np.zeros([RESIZED_DATA_X*10])
 	a[current_degree] = 1
@@ -62,7 +53,7 @@ def get_current_state():
 	c = np.reshape(c, (20,20))
 	return c
 
-#if we overlay, we get reward
+#if we are in the same position as the second array, we get reward
 #we reshape into two arrays, first array is the pixel which can be moved, the second array is the goal
 def get_reward(current_state):
 	s = np.reshape(current_state, (2, RESIZED_DATA_X*10))
@@ -80,9 +71,10 @@ def choose_next_action(last_state):
 	#simple decreaseing
 	if not_random == 1:
 		random_loop += 1
-		if random_loop >= 100:
-			probability_of_random_action -= 0.00001
-			random_loop = 0
+		if delayer == 1:
+			if random_loop >= 100:
+				probability_of_random_action -= 0.00001
+				random_loop = 0
 
 	#print probability_of_random_action
 	
@@ -123,8 +115,8 @@ def do_action(action):
 	if action[2] == 1:
 		current_degree -= 1
 
-	if current_degree > 199: #263:
-        	current_degree = 199 #263
+	if current_degree > 50: #199: #263:
+        	current_degree = 50#199 #263
         elif current_degree < 0:
         	current_degree = 0
 
@@ -143,14 +135,6 @@ def train(observations):
 	agents_expected_reward = []
 
         agents_reward_per_action = session.run(output_layer, feed_dict={input_layer: current_states})
-
-	for i in range(len(agents_reward_per_action)):
-		if np.isnan(agents_reward_per_action[i][0]) == True:
-			print "NNNNNNNNNNNNNNAAAAAAAAAAAANNNNNNNNNNN"
-			agents_reward_per_action[i][0] = 0
-		if np.isnan(agents_reward_per_action[i][1]) == True:
-			print "NNNNNNNNNNNNAAAAANNNNNNNNNNNNNNNN"
-			agents_reward_per_action[i][1] = 0
 
         for i in range(len(mini_batch)):
         	agents_expected_reward.append(rewards[i] + FUTURE_REWARD_DISCOUNT * np.max(agents_reward_per_action[i]))
@@ -187,7 +171,6 @@ root = Tkinter.Tk()
 frame = Tkinter.Frame(root, width=75, height=75)
 frame.pack()
 canvas = Tkinter.Canvas(frame, width=75,height=75)
-#canvas.place(x=-2,y=-2)
 canvas.place(x=-2,y=-2)
 root.after(1000,image_loop) # INCREASE THE 0 TO SLOW IT DOWN
 
@@ -291,7 +274,7 @@ merged = tf.merge_all_summaries()
 
 sum_writer = tf.train.SummaryWriter('/tmp/train/c/', session.graph)
 
-train_operation = tf.train.AdamOptimizer(0.0001).minimize(loss)
+train_operation = tf.train.AdamOptimizer(0.00001).minimize(loss)
 
 session.run(tf.initialize_all_variables())
 saver = tf.train.Saver()
@@ -306,6 +289,7 @@ if os.path.isfile("/home/ros/tensorflow-models/model-mini.ckpt"):
 
 data=np.array(np.random.random((RESIZED_DATA_X, RESIZED_DATA_Y))*100,dtype=int)
 obs = 0
+obs_s = 0
 
 try:
 	while True:
@@ -316,13 +300,14 @@ try:
 		#print("test if it loops or blocks")
 		state_from_env = get_current_state()
 		reward = get_reward(state_from_env)
-
+		#time.sleep(0.1)
+		
 		##tkinter update
 		global data
 		data=state_from_env
 		data = data * 255 #the value 1 * 255=255 => white pixel to see
 
-		state_from_env = ((state_from_env * 255) / 128)
+		state_from_env = (( (state_from_env * 255) - 128) / 128)
 	
 		#if we run for the first time, we build a state
 		if first_time == 1:
@@ -345,13 +330,16 @@ try:
 		#print len(observations)
 		#if len(observations) % OBSERVATION_STEPS == 0:
 		obs += 1
+		obs_s += 1
 		if obs > OBSERVATION_STEPS:
 			obs = 0
 			#for i in range(OBSERVATION_STEPS/MINI_BATCH_SIZE):
 			train(observations)
 		
 			#print "save model"
-		        save_path = saver.save(session, "/home/ros/tensorflow-models/model-mini.ckpt")
+			if obs_s > 1000:
+			        save_path = saver.save(session, "/home/ros/tensorflow-models/model-mini.ckpt")
+				obs_s = 0
 
 		last_state = current_state
 		last_action = choose_next_action(last_state)
@@ -366,9 +354,11 @@ try:
 			print probability_of_random_action
 			print train_play_loop
 			
-			degree_goal = random.randint(0, (max_degree-1) )
+			#degree_goal = random.randint(0, (max_degree-1) )
+			degree_goal = random.randint(0, (50-1) )
 
 			if train_play_loop <= 0:
+				delayer = 1
 				t = raw_input("train or play? input 0 for play, number for how often it train and find degree_goal: ")
 				t = int(t)
 				if t == 0:
