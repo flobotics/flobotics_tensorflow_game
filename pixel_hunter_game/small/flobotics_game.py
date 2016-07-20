@@ -26,7 +26,7 @@ RESIZED_DATA_Y = 20
 FUTURE_REWARD_DISCOUNT = 0.9
 
 
-probability_of_random_action = 1.0 
+probability_of_random_action = 1.01 
 sum_writer_index = 0
 train_play_loop = 10
 
@@ -139,7 +139,7 @@ def train(observations):
         for i in range(len(mini_batch)):
         	agents_expected_reward.append(rewards[i] + FUTURE_REWARD_DISCOUNT * np.max(agents_reward_per_action[i]))
 
-	_, result = session.run([train_operation, merged], feed_dict={input_layer: previous_states, action : actions, target: agents_expected_reward})
+	_, result = session.run([train_operation, merged], feed_dict={input_layer: previous_states, action : actions, target: agents_expected_reward, keep_prob: 0.5})
 	sum_writer.add_summary(result, sum_writer_index)
 	sum_writer_index += 1
 
@@ -182,20 +182,21 @@ session = tf.Session()
 state = tf.placeholder("float", [None, NUM_STATES])
 action = tf.placeholder("float", [None, NUM_ACTIONS])
 target = tf.placeholder("float", [None])
+keep_prob = tf.placeholder("float")
 
 input_layer = tf.placeholder("float", [None, RESIZED_DATA_X, RESIZED_DATA_Y, STATE_FRAMES])
 
 with tf.name_scope("conv1") as conv1:
-	conv_weights_1 = weight_variable([8,8,4,32], "conv1_weights")
+	conv_weights_1 = weight_variable([1,1,4,32], "conv1_weights")
         conv_biases_1 = bias_variable([32], "conv1_biases")
         cw1_hist = tf.histogram_summary("conv1/weights", conv_weights_1)
         cb1_hist = tf.histogram_summary("conv1/biases", conv_biases_1)
-        c1 = tf.reshape(conv_weights_1, [32, 8,8, 4])
+        c1 = tf.reshape(conv_weights_1, [32, 1, 1, 4])
         cw1_image_hist = tf.image_summary("conv1_w", c1)
 	
 	l2n_input_layer = tf.nn.l2_normalize(input_layer, 0)
 	
-	h_conv1 = tf.nn.relu(tf.nn.conv2d(l2n_input_layer, conv_weights_1, strides=[1, 4, 4, 1], padding="SAME") + conv_biases_1)
+	h_conv1 = tf.nn.relu(tf.nn.conv2d(l2n_input_layer, conv_weights_1, strides=[1, 1, 1, 1], padding="VALID") + conv_biases_1)
         
 	bn_conv1_mean, bn_conv1_variance = tf.nn.moments(h_conv1,[0,1,2,3])
         bn_conv1_scale = tf.Variable(tf.ones([32]))
@@ -204,14 +205,15 @@ with tf.name_scope("conv1") as conv1:
 	bn_conv1 = tf.nn.batch_normalization(h_conv1, bn_conv1_mean, bn_conv1_variance, bn_conv1_offset, bn_conv1_scale, bn_conv1_epsilon)
 	
 	h_pool1 = max_pool_2x2(bn_conv1)
+	#h_pool1 = tf.nn.max_pool(bn_conv1, ksize=[1,1,1,1], strides=[1,1,1,1], padding='SAME')
 	
 
 with tf.name_scope("conv2") as conv2:
-        conv_weights_2 = weight_variable([3,3,32,64], "conv2_weights")
+        conv_weights_2 = weight_variable([2,2,32,64], "conv2_weights")
         conv_biases_2 = bias_variable([64], "conv2_biases")
         cw2_hist = tf.histogram_summary("conv2/weights", conv_weights_2)
         cb2_hist = tf.histogram_summary("conv2/biases", conv_biases_2)
-        c2 = tf.reshape(conv_weights_2, [32,64,3,3])
+        c2 = tf.reshape(conv_weights_2, [32,64,1,4])
         cw2_image_hist = tf.image_summary("conv2_w", c2)
 
 	h_conv2 = tf.nn.relu(tf.nn.conv2d(h_pool1, conv_weights_2, strides=[1, 2, 2, 1], padding="SAME") + conv_biases_2)
@@ -222,43 +224,59 @@ with tf.name_scope("conv2") as conv2:
 	bn_conv2_epsilon = 1e-3
 	bn_conv2 = tf.nn.batch_normalization(h_conv2, bn_conv2_mean, bn_conv2_variance, bn_conv2_offset, bn_conv2_scale, bn_conv2_epsilon)
 
-	h_pool2 = max_pool_2x2(h_conv2)
-
-
-with tf.name_scope("conv3") as conv3:
-        conv_weights_3 = weight_variable([1,1,64,64], "conv3_weights")
-        conv_biases_3 = bias_variable([64], "conv3_biases")
-        cw3_hist = tf.histogram_summary("conv3/weights", conv_weights_3)
-        cb3_hist = tf.histogram_summary("conv3/biases", conv_biases_3)
-        c3 = tf.reshape(conv_weights_3, [64,64,1,1])
-        cw3_image_hist = tf.image_summary("conv3_w", c3)
-
-	h_conv3 = tf.nn.relu(tf.nn.conv2d(h_pool2, conv_weights_3, strides=[1,1,1,1], padding="SAME") + conv_biases_3)
-	bn_conv3_mean, bn_conv3_variance = tf.nn.moments(h_conv3, [0,1,2,3])
-	bn_conv3_scale = tf.Variable(tf.ones([64]))
-	bn_conv3_offset = tf.Variable(tf.zeros([64]))
-	bn_conv3_epsilon = 1e-3
-
-	h_pool3 = tf.nn.max_pool(h_conv3, ksize=[1,1,1,1], strides=[1,1,1,1], padding='SAME')
+	#h_pool2 = max_pool_2x2(h_conv2)
+	h_pool2 = tf.nn.max_pool(bn_conv2, ksize=[1,1,1,1], strides=[1,1,1,1], padding='SAME')
+#
+#
+#with tf.name_scope("conv3") as conv3:
+#        conv_weights_3 = weight_variable([1,1,64,64], "conv3_weights")
+#        conv_biases_3 = bias_variable([64], "conv3_biases")
+#        cw3_hist = tf.histogram_summary("conv3/weights", conv_weights_3)
+#        cb3_hist = tf.histogram_summary("conv3/biases", conv_biases_3)
+#        c3 = tf.reshape(conv_weights_3, [64,64,1,1])
+#        cw3_image_hist = tf.image_summary("conv3_w", c3)
+#
+#	h_conv3 = tf.nn.relu(tf.nn.conv2d(h_pool2, conv_weights_3, strides=[1,1,1,1], padding="SAME") + conv_biases_3)
+#	bn_conv3_mean, bn_conv3_variance = tf.nn.moments(h_conv3, [0,1,2,3])
+#	bn_conv3_scale = tf.Variable(tf.ones([64]))
+#	bn_conv3_offset = tf.Variable(tf.zeros([64]))
+#	bn_conv3_epsilon = 1e-3
+#
+#	h_pool3 = tf.nn.max_pool(h_conv3, ksize=[1,1,1,1], strides=[1,1,1,1], padding='SAME')
 
 
 with tf.name_scope("fc_1") as fc_1:
-        fc1_weights = weight_variable([1*1*64, 4624], "fc1_weights")
-        fc1_biases = bias_variable([4624], "fc1_biases")
+        fc1_weights = weight_variable([5*5*64, 512], "fc1_weights")
+        fc1_biases = bias_variable([512], "fc1_biases")
         fc1_b_hist = tf.histogram_summary("fc_1/biases", fc1_biases)
         fc1_w_hist = tf.histogram_summary("fc_1/weights", fc1_weights)
 
-	h_pool3_flat = tf.reshape(h_pool3, [-1,1*1*64])
+	h_pool3_flat = tf.reshape(h_pool2, [-1,5*5*64])
+
+	#h_pool3_flat = tf.reshape(h_pool1, [-1,128])
+	#h_pool3_flat = tf.reshape(h_pool2, [-1,5*5*64])
 	final_hidden_activation = tf.nn.relu(tf.matmul(h_pool3_flat, fc1_weights, name='final_hidden_activation') + fc1_biases)
+	#final_hidden_activation = tf.nn.relu(tf.matmul(h_fc1_drop, fc1_weights, name='final_hidden_activation') + fc1_biases)
+
+
+
 
 with tf.name_scope("fc_2") as fc_2:
-        fc2_weights = weight_variable([4624, NUM_ACTIONS], "fc2_weights")
+        fc2_weights = weight_variable([512, NUM_ACTIONS], "fc2_weights")
         fc2_biases = bias_variable([NUM_ACTIONS], "fc2_biases")
         fc2_w_hist = tf.histogram_summary("fc_2/weights", fc2_weights)
         fc2_b_hist = tf.histogram_summary("fc_2/biases", fc2_biases)
 
-	output_layer = tf.matmul(final_hidden_activation, fc2_weights) + fc2_biases
+	#keep_prob = tf.placeholder(tf.float32)
+
+        h_fc1_drop = tf.nn.dropout(final_hidden_activation, 0.5 )
+
+
+	#output_layer = tf.matmul(final_hidden_activation, fc2_weights) + fc2_biases
+	output_layer = tf.matmul(h_fc1_drop, fc2_weights) + fc2_biases
 	ol_hist = tf.histogram_summary("output_layer", output_layer)
+
+
 
 
 #we feed in the action the NN would do and targets=rewards ???
@@ -276,7 +294,8 @@ merged = tf.merge_all_summaries()
 
 sum_writer = tf.train.SummaryWriter('/tmp/train/c/', session.graph)
 
-train_operation = tf.train.AdamOptimizer(0.01, epsilon=0.001).minimize(loss)
+train_operation = tf.train.AdamOptimizer(0.0001, epsilon=0.000001).minimize(loss)
+
 
 session.run(tf.initialize_all_variables())
 saver = tf.train.Saver()
