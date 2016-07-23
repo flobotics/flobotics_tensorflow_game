@@ -15,12 +15,11 @@ current_degree = 7
 
 STATE_FRAMES = 4
 NUM_ACTIONS = 3  #stop,left,right 
-NUM_STATES = 400 
 MEMORY_SIZE = 30000
 OBSERVATION_STEPS = 1000
 MINI_BATCH_SIZE = 10
 
-RESIZED_DATA_X = 10  #NUM_STATES resized to 10x2
+RESIZED_DATA_X = 10 
 RESIZED_DATA_Y = 2 
 FUTURE_REWARD_DISCOUNT = 0.9
 
@@ -184,7 +183,6 @@ root.after(1000,image_loop) # INCREASE THE 0 TO SLOW IT DOWN
 
 session = tf.Session()
 
-#state = tf.placeholder("float", [None, NUM_STATES])
 action = tf.placeholder("float", [None, NUM_ACTIONS])
 target = tf.placeholder("float", [None])
 
@@ -198,8 +196,6 @@ with tf.name_scope("conv1") as conv1:
         c1 = tf.reshape(conv_weights_1, [32, 1,1, 4])
         cw1_image_hist = tf.image_summary("conv1_w", c1)
 	
-	#l2n_input_layer = tf.nn.l2_normalize(input_layer, 0)
-	
 	h_conv1 = tf.nn.relu(tf.nn.conv2d(input_layer, conv_weights_1, strides=[1, 1, 1, 1], padding="SAME") + conv_biases_1)
         
 	bn_conv1_mean, bn_conv1_variance = tf.nn.moments(h_conv1,[0,1,2,3])
@@ -208,14 +204,8 @@ with tf.name_scope("conv1") as conv1:
         bn_conv1_epsilon = 1e-3
 	bn_conv1 = tf.nn.batch_normalization(h_conv1, bn_conv1_mean, bn_conv1_variance, bn_conv1_offset, bn_conv1_scale, bn_conv1_epsilon)
 	
-	#h_pool1 = max_pool_2x2(bn_conv1)
-	#h_pool1_1 = tf.nn.max_pool(bn_conv1, ksize=[1,2,2,1], strides=[1,2,2,1], padding='SAME')
-	#h_pool1 = tf.nn.max_pool(h_pool1_1, ksize=[1,1,1,1], strides=[1,1,1,1], padding='SAME')
-
 
 with tf.name_scope("fc_1") as fc_1:
-        #fc1_weights = weight_variable([1*1*64, 4624], "fc1_weights")
-        #fc1_biases = bias_variable([4624], "fc1_biases")
 	fc1_weights = weight_variable([10*2*32, 200], "fc1_weights")
         fc1_biases = bias_variable([200], "fc1_biases")
         fc1_b_hist = tf.histogram_summary("fc_1/biases", fc1_biases)
@@ -225,7 +215,6 @@ with tf.name_scope("fc_1") as fc_1:
 	final_hidden_activation = tf.nn.relu(tf.matmul(h_pool3_flat, fc1_weights, name='final_hidden_activation') + fc1_biases)
 
 with tf.name_scope("fc_2") as fc_2:
-        #fc2_weights = weight_variable([4624, NUM_ACTIONS], "fc2_weights")
 	fc2_weights = weight_variable([200, NUM_ACTIONS], "fc2_weights")
         fc2_biases = bias_variable([NUM_ACTIONS], "fc2_biases")
         fc2_w_hist = tf.histogram_summary("fc_2/weights", fc2_weights)
@@ -235,7 +224,6 @@ with tf.name_scope("fc_2") as fc_2:
 	ol_hist = tf.histogram_summary("output_layer", output_layer)
 
 
-#we feed in the action the NN would do and targets=rewards ???
 with tf.name_scope("readout"):
 	readout_action = tf.reduce_sum(tf.mul(output_layer, action), reduction_indices=1)
 	r_hist = tf.histogram_summary("readout_action", readout_action)
@@ -272,40 +260,30 @@ try:
 		root.update_idletasks()
 		root.update()
 
-		#print("test if it loops or blocks")
 		state_from_env = get_current_state()
 		reward = get_reward(state_from_env)
-		#time.sleep(0.1)
 		
 		##tkinter update
 		global data
 		data1 = np.asarray(state_from_env)
 		data = np.reshape(data1, (2,10))
-		#data = data * 255 #the value 1 * 255=255 => white pixel to see
-
-		#state_from_env = (( (state_from_env * 255) - 128) / 128)
-		#state_from_env = (( state_from_env - 128) / 128)
 	
 		#if we run for the first time, we build a state
 		if first_time == 1:
 			first_time = 0
 			last_state = np.stack(tuple(state_from_env for _ in range(STATE_FRAMES)), axis=2)
 			last_action = np.zeros([NUM_ACTIONS])  #speeed of both servos 0
-			#do_action() which does nothing
 
 
 		state_from_env = state_from_env.reshape(RESIZED_DATA_X, RESIZED_DATA_Y, 1)
-		#state_from_env = np.linalg.norm(state_from_env)
 		current_state = np.append(last_state[:,:,1:], state_from_env, axis=2)
 
 
 		observations.append((last_state, last_action, reward, current_state))	
 
 		if len(observations) > MEMORY_SIZE:
-			#print("POPLEFT---------------------")
 			observations.popleft()
 
-		#print len(observations)
 		#if len(observations) % OBSERVATION_STEPS == 0:
 		obs += 1
 		obs_s += 1
@@ -322,7 +300,7 @@ try:
 		last_state = current_state
 		last_action = choose_next_action(last_state)
 
-		#if we got the max reward, we change degree_goal mostly, perhaps sometimes force_1/2_goal
+		#if we got the max reward, we change degree_goal 
 		if reward == 1:
 			print("MAX REWARD -------- NEW DEGREE GOAL")
 			global train_play_loop
@@ -332,7 +310,6 @@ try:
 			print probability_of_random_action
 			print train_play_loop
 			
-			#degree_goal = random.randint(0, (max_degree-1) )
 			degree_goal = random.randint(0, (RESIZED_DATA_X-1) )
 
 			if train_play_loop <= 0:
