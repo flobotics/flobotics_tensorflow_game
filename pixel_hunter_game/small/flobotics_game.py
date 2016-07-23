@@ -17,9 +17,9 @@ current_degree = 10
 STATE_FRAMES = 4
 NUM_ACTIONS = 3  #stop,left,right 
 NUM_STATES = 400 
-MEMORY_SIZE = 3000
-OBSERVATION_STEPS = 500
-MINI_BATCH_SIZE = 30
+MEMORY_SIZE = 30000
+OBSERVATION_STEPS = 3000
+MINI_BATCH_SIZE = 100
 
 RESIZED_DATA_X = 20  #NUM_STATES resized to 20x20
 RESIZED_DATA_Y = 20 
@@ -36,17 +36,17 @@ root = None
 canvas = None
 not_random = 1
 random_loop = 0
-delayer = 0
+delayer = 1
 
 #build a 20x20 array with two pixels with value 1, all other value 0
 def get_current_state():
 	global current_degree
 	global degree_goal
 
-	a = np.zeros([RESIZED_DATA_X*10])
-	a[current_degree] = 1
-	b = np.zeros([RESIZED_DATA_X*10])
-	b[degree_goal] = 1
+	a = np.ones([RESIZED_DATA_X*10])
+	a[current_degree] = 255
+	b = np.ones([RESIZED_DATA_X*10])
+	b[degree_goal] = 255
 	c = []
 	c.extend(a)
 	c.extend(b)
@@ -57,7 +57,24 @@ def get_current_state():
 #we reshape into two arrays, first array is the pixel which can be moved, the second array is the goal
 def get_reward(current_state):
 	s = np.reshape(current_state, (2, RESIZED_DATA_X*10))
-	r = s[0] * s[1]
+
+	s1 = np.zeros([RESIZED_DATA_X*10])
+        idx1 = np.argmax(s[0])
+        #print "idx1"
+        #print idx1
+        s1[idx1] = 1
+        s2 = np.zeros([RESIZED_DATA_X*10])
+        idx2 = np.argmax(s[1])
+        #print "idx2"
+        #print idx2
+        s2[idx2] = 1
+
+        r = s1 * s2
+
+
+
+
+	#r = s[0] * s[1]
 	r = sum(r)
 	return r
 
@@ -72,7 +89,7 @@ def choose_next_action(last_state):
 	if not_random == 1:
 		random_loop += 1
 		if delayer == 1:
-			if random_loop >= 100:
+			if random_loop >= 1000:
 				probability_of_random_action -= 0.00001
 				random_loop = 0
 
@@ -135,6 +152,10 @@ def train(observations):
 	agents_expected_reward = []
 
         agents_reward_per_action = session.run(output_layer, feed_dict={input_layer: current_states})
+	#print "output_layer:"
+	#print output_layer.eval(feed_dict={input_layer: current_states}, session=session) 
+	#print "agent"
+	#print agents_reward_per_action[0]
 
         for i in range(len(mini_batch)):
         	agents_expected_reward.append(rewards[i] + FUTURE_REWARD_DISCOUNT * np.max(agents_reward_per_action[i]))
@@ -165,6 +186,7 @@ observations = deque()
 first_time = 1
 last_state = None
 
+increaser= 0
 
 #######TK inter 
 root = Tkinter.Tk()
@@ -179,7 +201,7 @@ root.after(1000,image_loop) # INCREASE THE 0 TO SLOW IT DOWN
 
 session = tf.Session()
 
-state = tf.placeholder("float", [None, NUM_STATES])
+#state = tf.placeholder("float", [None, NUM_STATES])
 action = tf.placeholder("float", [None, NUM_ACTIONS])
 target = tf.placeholder("float", [None])
 keep_prob = tf.placeholder("float")
@@ -194,9 +216,9 @@ with tf.name_scope("conv1") as conv1:
         c1 = tf.reshape(conv_weights_1, [32, 1, 1, 4])
         cw1_image_hist = tf.image_summary("conv1_w", c1)
 	
-	l2n_input_layer = tf.nn.l2_normalize(input_layer, 0)
+	#l2n_input_layer = tf.nn.l2_normalize(input_layer, 0)
 	
-	h_conv1 = tf.nn.relu(tf.nn.conv2d(l2n_input_layer, conv_weights_1, strides=[1, 1, 1, 1], padding="VALID") + conv_biases_1)
+	h_conv1 = tf.nn.relu(tf.nn.conv2d(input_layer, conv_weights_1, strides=[1, 1, 1, 1], padding="VALID") + conv_biases_1)
         
 	bn_conv1_mean, bn_conv1_variance = tf.nn.moments(h_conv1,[0,1,2,3])
         bn_conv1_scale = tf.Variable(tf.ones([32]))
@@ -281,20 +303,25 @@ with tf.name_scope("fc_2") as fc_2:
 
 #we feed in the action the NN would do and targets=rewards ???
 with tf.name_scope("readout"):
+	#output_layer_softm = tf.nn.softmax(output_layer)
 	readout_action = tf.reduce_sum(tf.mul(output_layer, action), reduction_indices=1)
 	r_hist = tf.histogram_summary("readout_action", readout_action)
 
 with tf.name_scope("loss_summary"):
 	#loss = tf.reduce_mean(tf.square(output - target))
 	loss = tf.reduce_mean(tf.square(target - readout_action))
-        #loss = tf.reduce_mean(tf.square(output_layer - target))
+	
+        #loss = tf.reduce_mean(tf.square(readout_action - target))
+	#loss = tf.reduce_mean(-tf.reduce_sum(target * tf.log(readout_action), reduction_indices=[0]))
+	#loss = tf.cast(tf.equal(tf.argmax(readout_action,1), tf.argmax(target,1)), tf.float32)
+	
         tf.scalar_summary("loss", loss)
 
 merged = tf.merge_all_summaries()
 
 sum_writer = tf.train.SummaryWriter('/tmp/train/c/', session.graph)
 
-train_operation = tf.train.AdamOptimizer(0.0001, epsilon=0.000001).minimize(loss)
+train_operation = tf.train.AdamOptimizer(0.01, epsilon=0.000001).minimize(loss)
 
 
 session.run(tf.initialize_all_variables())
@@ -326,9 +353,10 @@ try:
 		##tkinter update
 		global data
 		data=state_from_env
-		data = data * 255 #the value 1 * 255=255 => white pixel to see
+		#data = data * 255 #the value 1 * 255=255 => white pixel to see
 
-		state_from_env = (( (state_from_env * 255) - 128) / 128)
+		#normalization of input data
+		#state_from_env = (( (state_from_env * 255) - 128) / 128)
 	
 		#if we run for the first time, we build a state
 		if first_time == 1:
@@ -368,10 +396,15 @@ try:
 		#if we got the max reward, we change degree_goal mostly, perhaps sometimes force_1/2_goal
 		if reward == 1:
 			print("MAX REWARD -------- NEW DEGREE GOAL")
+			global increaser
 			global train_play_loop
 			global probability_of_random_action
 			global not_random
 
+			#increaser += 1
+			#reward += increaser
+
+			print reward
 			print probability_of_random_action
 			print train_play_loop
 			
