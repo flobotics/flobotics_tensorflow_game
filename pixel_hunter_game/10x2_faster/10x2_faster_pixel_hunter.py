@@ -24,7 +24,7 @@ RESIZED_DATA_Y = 2
 FUTURE_REWARD_DISCOUNT = 0.9
 
 
-probability_of_random_action = 0.0 
+probability_of_random_action = 1.0 
 sum_writer_index = 0
 train_play_loop = 10
 
@@ -84,12 +84,11 @@ def choose_next_action(last_state):
 		random_loop = 0
 
 	
-#	if random.random() < probability_of_random_action:
-#		new_action_index = random.randint(0,2)
-#		new_action[new_action_index] = 1
+	if random.random() < probability_of_random_action:
+		new_action_index = random.randint(0,2)
+		new_action[new_action_index] = 1
 		#print new_action
-#	else:
-	if True:
+	else:
 		readout_t = session.run(output_layer, feed_dict={input_layer: [last_state]})
 		r1 = np.asarray(readout_t)
 		r1 = np.reshape(r1, (NUM_ACTIONS))
@@ -118,13 +117,13 @@ def do_action(action):
 
 	if action[0] == 1:
 		current_degree = current_degree
-		print("stop-action")
+		#print("stop-action")
 	if action[1] == 1:
 		current_degree += 1
-		print("plus-action")
+		#print("plus-action")
 	if action[2] == 1:
 		current_degree -= 1
-		print("minus-action")
+		#print("minus-action")
 
 	if current_degree > (RESIZED_DATA_X - 1): 
         	current_degree = (RESIZED_DATA_X - 1)
@@ -132,7 +131,7 @@ def do_action(action):
         	current_degree = 0
 
 	steps_done += 1
-	print("do step", steps_done)
+	#print("do step", steps_done)
 
 def train(observations):
 	#print("train")
@@ -198,14 +197,14 @@ target = tf.placeholder("float", [None])
 input_layer = tf.placeholder("float", [None, RESIZED_DATA_X, RESIZED_DATA_Y, STATE_FRAMES])
 
 with tf.name_scope("conv1") as conv1:
-	conv_weights_1 = weight_variable([1,1,4,32], "conv1_weights")
+	conv_weights_1 = weight_variable([2,2,4,32], "conv1_weights")
         conv_biases_1 = bias_variable([32], "conv1_biases")
         cw1_hist = tf.histogram_summary("conv1/weights", conv_weights_1)
         cb1_hist = tf.histogram_summary("conv1/biases", conv_biases_1)
-        c1 = tf.reshape(conv_weights_1, [32, 1,1, 4])
+        c1 = tf.reshape(conv_weights_1, [32, 2,2, 4])
         cw1_image_hist = tf.image_summary("conv1_w", c1)
 	
-	h_conv1 = tf.nn.relu(tf.nn.conv2d(input_layer, conv_weights_1, strides=[1, 1, 1, 1], padding="VALID") + conv_biases_1)
+	h_conv1 = tf.nn.relu(tf.nn.conv2d(input_layer, conv_weights_1, strides=[1, 1, 1, 1], padding="SAME") + conv_biases_1)
         
 	bn_conv1_mean, bn_conv1_variance = tf.nn.moments(h_conv1,[0,1,2,3])
         bn_conv1_scale = tf.Variable(tf.ones([32]))
@@ -291,7 +290,7 @@ try:
 		state_from_env = get_current_state()
 		reward = get_reward(state_from_env)
 	
-		time.sleep(3)	
+		#time.sleep(3)	
 		##tkinter update
 		global data
 		data1 = np.asarray(state_from_env)
@@ -375,7 +374,7 @@ try:
 			steps_done = 0
 			
 
-			#train_play_loop = 1
+			train_play_loop = 1
 			if train_play_loop <= 0:
 
 				t = raw_input("train or play? input 0 for play, number for how often it train and find degree_goal: ")
