@@ -1,0 +1,2 @@
+model_checkpoint_path: "/home/ros/tensorflow-models/model-mini.ckpt"
+all_model_checkpoint_paths: "/home/ros/tensorflow-models/model-mini.ckpt"
