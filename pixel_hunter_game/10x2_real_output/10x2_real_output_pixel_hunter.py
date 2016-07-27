@@ -14,7 +14,7 @@ current_degree = 7
 
 
 STATE_FRAMES = 4
-NUM_ACTIONS = 3  #stop,left,right 
+NUM_ACTIONS = 1  #stop,left,right 
 MEMORY_SIZE = 300000
 OBSERVATION_STEPS = 1000
 MINI_BATCH_SIZE = 1000
@@ -24,7 +24,7 @@ RESIZED_DATA_Y = 2
 FUTURE_REWARD_DISCOUNT = 0.9
 
 
-probability_of_random_action = 0.3 
+probability_of_random_action = 1.0 
 sum_writer_index = 0
 train_play_loop = 10
 
@@ -85,16 +85,19 @@ def choose_next_action(last_state):
 
 	
 	if random.random() < probability_of_random_action:
-		new_action_index = random.randint(0,2)
-		new_action[new_action_index] = 1
+		#new_action_index = random.randint(0,10)
+		new_action_float = random.uniform(-10, 10)
+		#new_action[new_action_index] = 1
+		new_action[0] = new_action_float
 		#print new_action
 	else:
 		readout_t = session.run(output_layer, feed_dict={input_layer: [last_state]})
 		r1 = np.asarray(readout_t)
 		r1 = np.reshape(r1, (NUM_ACTIONS))
-		action_index = np.argmax(readout_t)
-		new_action[action_index] = 1
-		#print new_action
+		#action_index = np.argmax(readout_t)
+		#new_action[action_index] = 1
+		new_action[0] = r1[0]
+		print "new_action %f" %new_action
 	
 	return new_action
 
@@ -115,15 +118,17 @@ def do_action(action):
 	global current_degree
 	global steps_done
 
-	if action[0] == 1:
-		current_degree = current_degree
-		#print("stop-action")
-	if action[1] == 1:
-		current_degree += 1
-		#print("plus-action")
-	if action[2] == 1:
-		current_degree -= 1
-		#print("minus-action")
+#	if action[0] == 1:
+#		current_degree = current_degree
+#		#print("stop-action")
+#	if action[1] == 1:
+#		current_degree += 1
+#		#print("plus-action")
+#	if action[2] == 1:
+#		current_degree -= 1
+#		#print("minus-action")
+
+	current_degree += action[0]
 
 	if current_degree > (RESIZED_DATA_X - 1): 
         	current_degree = (RESIZED_DATA_X - 1)
@@ -305,8 +310,10 @@ try:
 
 		state_from_env = state_from_env.reshape(RESIZED_DATA_X, RESIZED_DATA_Y, 1)
 		current_state = np.append(last_state[:,:,1:], state_from_env, axis=2)
-
-
+		global steps_done
+		global steps_needed
+		if (steps_done > steps_needed) and (reward > 0):
+			reward = reward * 0.5
 		observations.append((last_state, last_action, reward, current_state))	
 
 		if len(observations) > MEMORY_SIZE:
@@ -329,7 +336,8 @@ try:
 		last_action = choose_next_action(last_state)
 
 		#if we got the max reward, we change degree_goal 
-		if reward == 1:
+		#if reward == 1:
+		if reward >= 0.5:
 			print("MAX REWARD -------- NEW DEGREE GOAL")
 			global train_play_loop
 			global probability_of_random_action
