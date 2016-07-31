@@ -17,7 +17,7 @@ STATE_FRAMES = 4
 NUM_ACTIONS = 1  #stop,left,right 
 MEMORY_SIZE = 300000
 OBSERVATION_STEPS = 1000
-MINI_BATCH_SIZE = 1000
+MINI_BATCH_SIZE = 500
 
 RESIZED_DATA_X = 10 
 RESIZED_DATA_Y = 2 
@@ -44,10 +44,10 @@ def get_current_state():
 	global current_degree
 	global degree_goal
 
-	a = np.ones([RESIZED_DATA_X])
-	a[current_degree] = 255
-	b = np.ones([RESIZED_DATA_X])
-	b[degree_goal] = 255
+	a = np.zeros([RESIZED_DATA_X])
+	a[current_degree] = 1 #255
+	b = np.zeros([RESIZED_DATA_X])
+	b[degree_goal] = 1 #255
 	c = []
 	c.extend(a)
 	c.extend(b)
@@ -78,7 +78,7 @@ def choose_next_action(last_state):
 
 	#simple decreaseing
 	random_loop +=1
-	if random_loop >= 100:
+	if random_loop >= 300:
 		probability_of_random_action -= 0.0001
 		print probability_of_random_action
 		random_loop = 0
@@ -86,7 +86,7 @@ def choose_next_action(last_state):
 	
 	if random.random() < probability_of_random_action:
 		#new_action_index = random.randint(0,10)
-		new_action_float = random.uniform(-10, 10)
+		new_action_float = (random.uniform(-10, 10) / 10)
 		#new_action[new_action_index] = 1
 		new_action[0] = new_action_float
 		#print new_action
@@ -96,7 +96,7 @@ def choose_next_action(last_state):
 		r1 = np.reshape(r1, (NUM_ACTIONS))
 		#action_index = np.argmax(readout_t)
 		#new_action[action_index] = 1
-		new_action[0] = r1[0]
+		new_action[0] = (r1[0] * 10)
 		print "new_action %f" %new_action
 	
 	return new_action
@@ -128,7 +128,8 @@ def do_action(action):
 #		current_degree -= 1
 #		#print("minus-action")
 
-	current_degree += action[0]
+	a = action[0] * 10
+	current_degree += int(a)
 
 	if current_degree > (RESIZED_DATA_X - 1): 
         	current_degree = (RESIZED_DATA_X - 1)
@@ -209,7 +210,8 @@ with tf.name_scope("conv1") as conv1:
         c1 = tf.reshape(conv_weights_1, [32, 10, 2, 4])
         cw1_image_hist = tf.image_summary("conv1_w", c1)
 	
-	h_conv1 = tf.nn.relu(tf.nn.conv2d(input_layer, conv_weights_1, strides=[1, 1, 1, 1], padding="SAME") + conv_biases_1)
+	#h_conv1 = tf.nn.relu(tf.nn.conv2d(input_layer, conv_weights_1, strides=[1, 1, 1, 1], padding="SAME") + conv_biases_1)
+	h_conv1 = tf.nn.tanh(tf.nn.conv2d(input_layer, conv_weights_1, strides=[1, 1, 1, 1], padding="SAME") + conv_biases_1)
         
 	bn_conv1_mean, bn_conv1_variance = tf.nn.moments(h_conv1,[0,1,2,3])
         bn_conv1_scale = tf.Variable(tf.ones([32]))
@@ -226,7 +228,8 @@ with tf.name_scope("conv2") as conv2:
         #c2 = tf.reshape(conv_weights_2, [32,64,2,2])
         #cw2_image_hist = tf.image_summary("conv2_w", c2)
 
-        h_conv2 = tf.nn.relu(tf.nn.conv2d(bn_conv1, conv_weights_2, strides=[1, 2, 2, 1], padding="SAME") + conv_biases_2)
+        #h_conv2 = tf.nn.relu(tf.nn.conv2d(bn_conv1, conv_weights_2, strides=[1, 2, 2, 1], padding="SAME") + conv_biases_2)
+	h_conv2 = tf.nn.tanh(tf.nn.conv2d(bn_conv1, conv_weights_2, strides=[1, 2, 2, 1], padding="SAME") + conv_biases_2)
 
         bn_conv2_mean, bn_conv2_variance = tf.nn.moments(h_conv2, [0,1,2,3])
         bn_conv2_scale = tf.Variable(tf.ones([64]))
@@ -244,7 +247,8 @@ with tf.name_scope("fc_1") as fc_1:
         fc1_w_hist = tf.histogram_summary("fc_1/weights", fc1_weights)
 
 	h_pool3_flat = tf.reshape(bn_conv2, [-1,5*1*64])
-	final_hidden_activation = tf.nn.relu(tf.matmul(h_pool3_flat, fc1_weights, name='final_hidden_activation') + fc1_biases)
+	#final_hidden_activation = tf.nn.relu(tf.matmul(h_pool3_flat, fc1_weights, name='final_hidden_activation') + fc1_biases)
+	final_hidden_activation = tf.nn.tanh(tf.matmul(h_pool3_flat, fc1_weights, name='final_hidden_activation') + fc1_biases)
 
 with tf.name_scope("fc_2") as fc_2:
 	fc2_weights = weight_variable([200, NUM_ACTIONS], "fc2_weights")
@@ -252,7 +256,8 @@ with tf.name_scope("fc_2") as fc_2:
         fc2_w_hist = tf.histogram_summary("fc_2/weights", fc2_weights)
         fc2_b_hist = tf.histogram_summary("fc_2/biases", fc2_biases)
 
-	output_layer = tf.matmul(final_hidden_activation, fc2_weights) + fc2_biases
+	#output_layer = tf.matmul(final_hidden_activation, fc2_weights) + fc2_biases
+	output_layer = tf.nn.tanh(tf.matmul(final_hidden_activation, fc2_weights) + fc2_biases)
 	ol_hist = tf.histogram_summary("output_layer", output_layer)
 
 
@@ -300,7 +305,9 @@ try:
 		global data
 		data1 = np.asarray(state_from_env)
 		data = np.reshape(data1, (2,10))
+		data = data * 255
 	
+
 		#if we run for the first time, we build a state
 		if first_time == 1:
 			first_time = 0
@@ -312,8 +319,14 @@ try:
 		current_state = np.append(last_state[:,:,1:], state_from_env, axis=2)
 		global steps_done
 		global steps_needed
-		if (steps_done > steps_needed) and (reward > 0):
-			reward = reward * 0.5
+		if reward > 0:
+			if steps_done == 1:
+				reward = reward
+			elif steps_done > 1:
+				reward = reward * 0.1
+
+
+
 		observations.append((last_state, last_action, reward, current_state))	
 
 		if len(observations) > MEMORY_SIZE:
@@ -337,8 +350,8 @@ try:
 
 		#if we got the max reward, we change degree_goal 
 		#if reward == 1:
-		if reward >= 0.5:
-			print("MAX REWARD -------- NEW DEGREE GOAL")
+		if reward >= 0.1:
+			print "MAX REWARD -------- NEW DEGREE GOAL %f" %reward
 			global train_play_loop
 			global probability_of_random_action
 			global not_random
@@ -348,10 +361,10 @@ try:
 			global step
 
 			print probability_of_random_action
-			print train_play_loop
+			#print train_play_loop
 			
-			print("steps_done1:",steps_done)
-			print("steps_needed1",steps_needed)
+			#print("steps_done1:",steps_done)
+			#print("steps_needed1",steps_needed)
 
 			accuracy = accuracy + (steps_done - steps_needed)
 
@@ -369,14 +382,14 @@ try:
 				accuracy = 0
 
 			old = degree_goal
-			print("old",old)
+			#print("old",old)
 			degree_goal = random.randint(0, (RESIZED_DATA_X-1) )
-			print("deg-goal:", degree_goal)
+			#print("deg-goal:", degree_goal)
 			if old > degree_goal:
 				steps_needed = old - degree_goal
 			elif degree_goal > old:
 				steps_needed = degree_goal - old
-			print("steps-needed:", steps_needed)
+			#print("steps-needed:", steps_needed)
 			if steps_needed == 0:
 				steps_needed = 1
 			steps_done = 0
