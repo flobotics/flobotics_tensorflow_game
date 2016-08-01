@@ -16,15 +16,15 @@ current_degree = 7
 STATE_FRAMES = 4
 NUM_ACTIONS = 1  #stop,left,right 
 MEMORY_SIZE = 300000
-OBSERVATION_STEPS = 1000
-MINI_BATCH_SIZE = 500
+OBSERVATION_STEPS = 300
+MINI_BATCH_SIZE = 100
 
 RESIZED_DATA_X = 10 
 RESIZED_DATA_Y = 2 
 FUTURE_REWARD_DISCOUNT = 0.9
 
 
-probability_of_random_action = 1.0 
+probability_of_random_action = 0.99 
 sum_writer_index = 0
 train_play_loop = 10
 
@@ -78,15 +78,16 @@ def choose_next_action(last_state):
 
 	#simple decreaseing
 	random_loop +=1
-	if random_loop >= 300:
+	if random_loop >= 5000:
 		probability_of_random_action -= 0.0001
 		print probability_of_random_action
 		random_loop = 0
 
 	
 	if random.random() < probability_of_random_action:
+	#if random_loop < 1000:
 		#new_action_index = random.randint(0,10)
-		new_action_float = (random.uniform(-10, 10) / 10)
+		new_action_float = random.uniform(-1, 1)
 		#new_action[new_action_index] = 1
 		new_action[0] = new_action_float
 		#print new_action
@@ -96,8 +97,10 @@ def choose_next_action(last_state):
 		r1 = np.reshape(r1, (NUM_ACTIONS))
 		#action_index = np.argmax(readout_t)
 		#new_action[action_index] = 1
-		new_action[0] = (r1[0] * 10)
+		new_action[0] = r1[0]
 		print "new_action %f" %new_action
+		#if random_loop > 2000:
+		#	random_loop = 0
 	
 	return new_action
 
