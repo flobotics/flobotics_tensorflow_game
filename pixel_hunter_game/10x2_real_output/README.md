@@ -10,4 +10,7 @@ The neural network should find out that it gets the most reward if it directly j
 
 If it uses intermediate steps , it only gets a friction of the reward.
 
+
+TIP: To not increase the code, simpler is better, use a magnifier tool like e.g. KMag to see the game in a bigger size.
+
 <img src="pixel-hunter.jpg" width="80%" />
