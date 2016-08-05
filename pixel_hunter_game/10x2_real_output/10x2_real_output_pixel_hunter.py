@@ -15,7 +15,7 @@ current_degree = 7
 
 STATE_FRAMES = 4
 NUM_ACTIONS = 1  #stop,left,right 
-MEMORY_SIZE = 300000
+MEMORY_SIZE = 500000
 OBSERVATION_STEPS = 300
 MINI_BATCH_SIZE = 100
 
@@ -24,7 +24,7 @@ RESIZED_DATA_Y = 2
 FUTURE_REWARD_DISCOUNT = 0.9
 
 
-probability_of_random_action = 0.99 
+probability_of_random_action = 0.7 
 sum_writer_index = 0
 train_play_loop = 10
 
@@ -78,10 +78,13 @@ def choose_next_action(last_state):
 
 	#simple decreaseing
 	random_loop +=1
-	if random_loop >= 5000:
+	if random_loop >= 50:
 		probability_of_random_action -= 0.0001
 		print probability_of_random_action
 		random_loop = 0
+
+	if probability_of_random_action < 0.01:
+		probability_of_random_action = 0.05
 
 	
 	if random.random() < probability_of_random_action:
@@ -155,7 +158,7 @@ def train(observations):
 	agents_expected_reward = []
 
         agents_reward_per_action = session.run(output_layer, feed_dict={input_layer: current_states})
-
+	
 
         for i in range(len(mini_batch)):
         	agents_expected_reward.append(rewards[i] + FUTURE_REWARD_DISCOUNT * np.max(agents_reward_per_action[i]))
@@ -163,6 +166,8 @@ def train(observations):
 	_, result = session.run([train_operation, merged], feed_dict={input_layer: previous_states, action : actions, target: agents_expected_reward})
 	sum_writer.add_summary(result, sum_writer_index)
 	sum_writer_index += 1
+	
+	session.run(add_sum_writer_index_var)
 
 #Tkinter loop
 def image_loop():
@@ -202,20 +207,25 @@ session = tf.Session()
 
 action = tf.placeholder("float", [None, NUM_ACTIONS])
 target = tf.placeholder("float", [None])
-
 input_layer = tf.placeholder("float", [None, RESIZED_DATA_X, RESIZED_DATA_Y, STATE_FRAMES])
+sum_writer_index_var = tf.Variable(0, "sum_writer_index_var")
+
+add_sum_writer_index_var = sum_writer_index_var.assign(sum_writer_index_var + 1)
 
 with tf.name_scope("conv1") as conv1:
 	conv_weights_1 = weight_variable([10, 2, 4,32], "conv1_weights")
         conv_biases_1 = bias_variable([32], "conv1_biases")
         cw1_hist = tf.histogram_summary("conv1/weights", conv_weights_1)
         cb1_hist = tf.histogram_summary("conv1/biases", conv_biases_1)
-        c1 = tf.reshape(conv_weights_1, [32, 10, 2, 4])
-        cw1_image_hist = tf.image_summary("conv1_w", c1)
+        c1_transposed = tf.transpose(conv_weights_1, [3,0,1,2])
+	#c1 = tf.reshape(conv_weights_1, [32, 10, 2, 4])
+        cw1_image_hist = tf.image_summary("conv1_w", c1_transposed)
 	
-	#h_conv1 = tf.nn.relu(tf.nn.conv2d(input_layer, conv_weights_1, strides=[1, 1, 1, 1], padding="SAME") + conv_biases_1)
-	h_conv1 = tf.nn.tanh(tf.nn.conv2d(input_layer, conv_weights_1, strides=[1, 1, 1, 1], padding="SAME") + conv_biases_1)
-        
+	h_conv1 = tf.nn.relu(tf.nn.conv2d(input_layer, conv_weights_1, strides=[1, 1, 1, 1], padding="SAME") + conv_biases_1)
+	#h_conv1 = tf.nn.tanh(tf.nn.conv2d(input_layer, conv_weights_1, strides=[1, 1, 1, 1], padding="SAME") + conv_biases_1)
+	#h_conv1 = tf.nn.l2_normalize(h_conv1_1, 0)
+	
+ 
 	bn_conv1_mean, bn_conv1_variance = tf.nn.moments(h_conv1,[0,1,2,3])
         bn_conv1_scale = tf.Variable(tf.ones([32]))
         bn_conv1_offset = tf.Variable(tf.zeros([32]))
@@ -231,8 +241,9 @@ with tf.name_scope("conv2") as conv2:
         #c2 = tf.reshape(conv_weights_2, [32,64,2,2])
         #cw2_image_hist = tf.image_summary("conv2_w", c2)
 
-        #h_conv2 = tf.nn.relu(tf.nn.conv2d(bn_conv1, conv_weights_2, strides=[1, 2, 2, 1], padding="SAME") + conv_biases_2)
-	h_conv2 = tf.nn.tanh(tf.nn.conv2d(bn_conv1, conv_weights_2, strides=[1, 2, 2, 1], padding="SAME") + conv_biases_2)
+        h_conv2 = tf.nn.relu(tf.nn.conv2d(bn_conv1, conv_weights_2, strides=[1, 2, 2, 1], padding="SAME") + conv_biases_2)
+	#h_conv2 = tf.nn.tanh(tf.nn.conv2d(bn_conv1, conv_weights_2, strides=[1, 2, 2, 1], padding="SAME") + conv_biases_2)
+	#h_conv2 = tf.nn.l2_normalize(h_conv2_1, 0)
 
         bn_conv2_mean, bn_conv2_variance = tf.nn.moments(h_conv2, [0,1,2,3])
         bn_conv2_scale = tf.Variable(tf.ones([64]))
@@ -259,8 +270,8 @@ with tf.name_scope("fc_2") as fc_2:
         fc2_w_hist = tf.histogram_summary("fc_2/weights", fc2_weights)
         fc2_b_hist = tf.histogram_summary("fc_2/biases", fc2_biases)
 
-	#output_layer = tf.matmul(final_hidden_activation, fc2_weights) + fc2_biases
-	output_layer = tf.nn.tanh(tf.matmul(final_hidden_activation, fc2_weights) + fc2_biases)
+	output_layer = tf.matmul(final_hidden_activation, fc2_weights) + fc2_biases
+	#output_layer = tf.nn.tanh(tf.matmul(final_hidden_activation, fc2_weights) + fc2_biases)
 	ol_hist = tf.histogram_summary("output_layer", output_layer)
 
 
@@ -277,7 +288,7 @@ merged = tf.merge_all_summaries()
 
 sum_writer = tf.train.SummaryWriter('/tmp/train/c/', session.graph)
 
-train_operation = tf.train.AdamOptimizer(0.001, epsilon=0.001).minimize(loss)
+train_operation = tf.train.AdamOptimizer(0.001, epsilon=0.0001).minimize(loss)
 
 session.run(tf.initialize_all_variables())
 saver = tf.train.Saver()
@@ -286,6 +297,7 @@ if os.path.isfile("/home/ros/tensorflow-models/model-mini.ckpt"):
 	saver.restore(session, "/home/ros/tensorflow-models/model-mini.ckpt")
 	print "model restored"
 
+	sum_writer_index = session.run(sum_writer_index_var)
 
 ########### end create network
 
@@ -324,9 +336,9 @@ try:
 		global steps_needed
 		if reward > 0:
 			if steps_done == 1:
-				reward = reward
+				reward = reward * 10
 			elif steps_done > 1:
-				reward = reward * 0.1
+				reward = reward
 
 
 
