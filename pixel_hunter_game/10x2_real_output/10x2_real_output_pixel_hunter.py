@@ -24,7 +24,7 @@ RESIZED_DATA_Y = 2
 FUTURE_REWARD_DISCOUNT = 0.9
 
 
-probability_of_random_action = 0.7 
+probability_of_random_action = 0.5 
 sum_writer_index = 0
 train_play_loop = 10
 
@@ -38,6 +38,7 @@ accuracy = 0
 steps_done = 0
 steps_needed = 0
 step = 0
+reward_avg = 0
 
 #build a 10x2 array 
 def get_current_state():
@@ -123,6 +124,7 @@ def max_pool_2x2(x):
 def do_action(action):
 	global current_degree
 	global steps_done
+	global steps_punish
 
 #	if action[0] == 1:
 #		current_degree = current_degree
@@ -163,7 +165,13 @@ def train(observations):
         for i in range(len(mini_batch)):
         	agents_expected_reward.append(rewards[i] + FUTURE_REWARD_DISCOUNT * np.max(agents_reward_per_action[i]))
 
-	_, result = session.run([train_operation, merged], feed_dict={input_layer: previous_states, action : actions, target: agents_expected_reward})
+	global reward_avg
+	print("reward_avg", reward_avg)
+	rew = np.array(reward_avg)
+	reward_avg = 0
+	#_, result = session.run([train_operation, merged], feed_dict={input_layer: previous_states, action : actions, target: agents_expected_reward})
+	_,__, result = session.run([train_operation,show_reward, merged], feed_dict={reward1: rew, input_layer: previous_states, action : actions, target: agents_expected_reward})
+
 	sum_writer.add_summary(result, sum_writer_index)
 	sum_writer_index += 1
 	
@@ -209,8 +217,12 @@ action = tf.placeholder("float", [None, NUM_ACTIONS])
 target = tf.placeholder("float", [None])
 input_layer = tf.placeholder("float", [None, RESIZED_DATA_X, RESIZED_DATA_Y, STATE_FRAMES])
 sum_writer_index_var = tf.Variable(0, "sum_writer_index_var")
-
 add_sum_writer_index_var = sum_writer_index_var.assign(sum_writer_index_var + 1)
+
+reward_var = tf.Variable(0.0, "reward_var")
+reward1 = tf.placeholder("float", [])
+show_reward = reward_var.assign(reward1)
+tf.scalar_summary("reward", show_reward)
 
 with tf.name_scope("conv1") as conv1:
 	conv_weights_1 = weight_variable([10, 2, 4,32], "conv1_weights")
@@ -334,13 +346,17 @@ try:
 		current_state = np.append(last_state[:,:,1:], state_from_env, axis=2)
 		global steps_done
 		global steps_needed
+		global steps_punish
+
 		if reward > 0:
 			if steps_done == 1:
 				reward = reward * 10
 			elif steps_done > 1:
 				reward = reward
-
-
+		else:
+			reward = -1
+		
+		reward_avg += reward
 
 		observations.append((last_state, last_action, reward, current_state))	
 
@@ -351,6 +367,9 @@ try:
 		obs += 1
 		obs_s += 1
 		if obs > OBSERVATION_STEPS:
+			global reward_avg
+
+			reward_avg = reward_avg / obs
 			obs = 0
 			#for i in range(OBSERVATION_STEPS/MINI_BATCH_SIZE):
 			train(observations)
@@ -374,6 +393,9 @@ try:
 			global steps_needed
 			global accuracy
 			global step
+			global reward_avg
+
+			#reward_avg += reward
 
 			print probability_of_random_action
 			#print train_play_loop

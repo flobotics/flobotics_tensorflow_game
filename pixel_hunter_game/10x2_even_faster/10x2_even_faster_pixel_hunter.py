@@ -15,16 +15,16 @@ current_degree = 7
 
 STATE_FRAMES = 4
 NUM_ACTIONS = 3  #stop,left,right 
-MEMORY_SIZE = 300000
-OBSERVATION_STEPS = 1000
-MINI_BATCH_SIZE = 1000
+MEMORY_SIZE = 30000
+OBSERVATION_STEPS = 500
+MINI_BATCH_SIZE = 100
 
 RESIZED_DATA_X = 10 
 RESIZED_DATA_Y = 2 
-FUTURE_REWARD_DISCOUNT = 0.9
+FUTURE_REWARD_DISCOUNT = 0.90
 
 
-probability_of_random_action = 0.3 
+probability_of_random_action = 1.0 
 sum_writer_index = 0
 train_play_loop = 10
 
@@ -35,19 +35,22 @@ canvas = None
 random_loop = 0
 
 accuracy = 0
-steps_done = 0
-steps_needed = 0
+actions_done = 0
+actions_needed = 2  #we need to go from 7 to 9
 step = 0
+
+reward_avg = 0.0
+reward_avg_count = 0
 
 #build a 10x2 array 
 def get_current_state():
 	global current_degree
 	global degree_goal
 
-	a = np.ones([RESIZED_DATA_X])
-	a[current_degree] = 255
-	b = np.ones([RESIZED_DATA_X])
-	b[degree_goal] = 255
+	a = np.zeros([RESIZED_DATA_X])
+	a[current_degree] = 1 #255
+	b = np.zeros([RESIZED_DATA_X])
+	b[degree_goal] = 1 #255
 	c = []
 	c.extend(a)
 	c.extend(b)
@@ -113,29 +116,32 @@ def max_pool_2x2(x):
 # we can only stop, go one pixel right or left
 def do_action(action):
 	global current_degree
-	global steps_done
+	global actions_done
 
 	if action[0] == 1:
 		current_degree = current_degree
-		#print("stop-action")
+		print("Do stop-action")
 	if action[1] == 1:
 		current_degree += 1
-		#print("plus-action")
+		print("Do plus-action")
 	if action[2] == 1:
 		current_degree -= 1
-		#print("minus-action")
+		print("Do minus-action")
 
 	if current_degree > (RESIZED_DATA_X - 1): 
         	current_degree = (RESIZED_DATA_X - 1)
         elif current_degree < 0:
         	current_degree = 0
 
-	steps_done += 1
-	#print("do step", steps_done)
+	actions_done += 1
+	#print("nr actions done", actions_done)
 
 def train(observations):
 	#print("train")
 	global sum_writer_index
+	global reward_avg
+	global reward_avg_count
+
 
 	mini_batch = random.sample(observations, MINI_BATCH_SIZE)
 	previous_states = [d[0] for d in mini_batch]
@@ -146,14 +152,23 @@ def train(observations):
 	agents_expected_reward = []
 
         agents_reward_per_action = session.run(output_layer, feed_dict={input_layer: current_states})
-
+	
+	if reward_avg_count > 0:
+		reward_avg = reward_avg / reward_avg_count
+	rew = np.array(reward_avg)
+	reward_avg = 0
+	reward_avg_count = 0
 
         for i in range(len(mini_batch)):
         	agents_expected_reward.append(rewards[i] + FUTURE_REWARD_DISCOUNT * np.max(agents_reward_per_action[i]))
 
-	_, result = session.run([train_operation, merged], feed_dict={input_layer: previous_states, action : actions, target: agents_expected_reward})
+	_, __, result = session.run([train_operation, assign_reward, merged], feed_dict={reward_placeholder: rew, input_layer: previous_states, action : actions, target: agents_expected_reward})
+	
 	sum_writer.add_summary(result, sum_writer_index)
 	sum_writer_index += 1
+
+	session.run(add_sum_writer_index_var)
+
 
 #Tkinter loop
 def image_loop():
@@ -168,6 +183,19 @@ def image_loop():
         root.update()
 
         root.after(100,image_loop)
+
+
+#update the game-display, so we can see what is played
+def tkinter_update(state_from_env):
+	global data
+
+        root.update_idletasks()
+        root.update()
+
+        data1 = np.asarray(state_from_env)
+	data1 = data1 * 255   #make a 1 to a 255, so we can see it as a white box
+        data = np.reshape(data1, (2,10))
+
 
 
 
@@ -193,8 +221,16 @@ session = tf.Session()
 
 action = tf.placeholder("float", [None, NUM_ACTIONS])
 target = tf.placeholder("float", [None])
-
 input_layer = tf.placeholder("float", [None, RESIZED_DATA_X, RESIZED_DATA_Y, STATE_FRAMES])
+
+sum_writer_index_var = tf.Variable(0, "sum_writer_index_var")
+add_sum_writer_index_var = sum_writer_index_var.assign(sum_writer_index_var + 1)
+
+reward_value = tf.Variable(0.0, "reward_value")
+reward_placeholder = tf.placeholder("float", [])
+assign_reward = reward_value.assign(reward_placeholder)
+reward_value_hist = tf.scalar_summary("reward_value", assign_reward)
+
 
 with tf.name_scope("conv1") as conv1:
 	conv_weights_1 = weight_variable([10, 2, 4,32], "conv1_weights")
@@ -264,7 +300,7 @@ merged = tf.merge_all_summaries()
 
 sum_writer = tf.train.SummaryWriter('/tmp/train/c/', session.graph)
 
-train_operation = tf.train.AdamOptimizer(0.001, epsilon=0.001).minimize(loss)
+train_operation = tf.train.AdamOptimizer(0.0001, epsilon=0.001).minimize(loss)
 
 session.run(tf.initialize_all_variables())
 saver = tf.train.Saver()
@@ -273,7 +309,9 @@ if os.path.isfile("/home/ros/tensorflow-models/model-mini.ckpt"):
 	saver.restore(session, "/home/ros/tensorflow-models/model-mini.ckpt")
 	print "model restored"
 
-
+	sum_writer_index = session.run(sum_writer_index_var)
+	
+	
 ########### end create network
 
 
@@ -283,18 +321,24 @@ obs_s = 0
 
 try:
 	while True:
-		#tkinter update
-		root.update_idletasks()
-		root.update()
+
+		global train_play_loop
+                global probability_of_random_action
+                global not_random
+                global actions_done
+                global actions_needed
+                global step
+		global reward_avg
+		global reward_avg_count
 
 		state_from_env = get_current_state()
 		reward = get_reward(state_from_env)
+
+		#update the image of the game, so we can see the game playing	
+		tkinter_update(state_from_env)
 	
-		#time.sleep(3)	
-		##tkinter update
-		global data
-		data1 = np.asarray(state_from_env)
-		data = np.reshape(data1, (2,10))
+		#time.sleep(3)
+
 	
 		#if we run for the first time, we build a state
 		if first_time == 1:
@@ -306,8 +350,18 @@ try:
 		state_from_env = state_from_env.reshape(RESIZED_DATA_X, RESIZED_DATA_Y, 1)
 		current_state = np.append(last_state[:,:,1:], state_from_env, axis=2)
 
-
+		if reward > 0:
+			if actions_done > actions_needed:
+				reward = 0.1
+				
+			reward_avg += reward
+			reward_avg_count += 1
+		
 		observations.append((last_state, last_action, reward, current_state))	
+
+		print "actions_done: %d" %actions_done
+                print "actions_needed: %d" %actions_needed
+
 
 		if len(observations) > MEMORY_SIZE:
 			observations.popleft()
@@ -329,49 +383,26 @@ try:
 		last_action = choose_next_action(last_state)
 
 		#if we got the max reward, we change degree_goal 
-		if reward == 1:
-			print("MAX REWARD -------- NEW DEGREE GOAL")
-			global train_play_loop
-			global probability_of_random_action
-			global not_random
-			global steps_done
-			global steps_needed
-			global accuracy
-			global step
+		if reward > 0:
+			print("REWARD -------- NEW DEGREE GOAL")
 
-			print probability_of_random_action
+			print "probability of random action %f" %probability_of_random_action
 			print train_play_loop
 			
-			print("steps_done1:",steps_done)
-			print("steps_needed1",steps_needed)
-
-			accuracy = accuracy + (steps_done - steps_needed)
-
-#			if probability_of_random_action <= 0.0:
-#				if step == 0:
-#					accuracy = 0
-#				if step >=  1000:
-#					if accuracy > 0:
-#						probability_of_random_action = 0.2
-#				step += 1
-
-			print "accuracy"	
-			print accuracy
-			if accuracy > 1000:
-				accuracy = 0
 
 			old = degree_goal
-			print("old",old)
+			print "old-goal: %d" %old
 			degree_goal = random.randint(0, (RESIZED_DATA_X-1) )
-			print("deg-goal:", degree_goal)
+			print "new-goal: %d" %degree_goal
 			if old > degree_goal:
-				steps_needed = old - degree_goal
-			elif degree_goal > old:
-				steps_needed = degree_goal - old
-			print("steps-needed:", steps_needed)
-			if steps_needed == 0:
-				steps_needed = 1
-			steps_done = 0
+				actions_needed = old - degree_goal
+			else:
+				actions_needed = degree_goal - old
+			print "actions-needed: %d" %actions_needed
+			#if we are directly at the new goal, we need a stop-action, so increase to one
+			if actions_needed == 0:
+				actions_needed = 1
+			actions_done = 0
 			
 
 			train_play_loop = 1
