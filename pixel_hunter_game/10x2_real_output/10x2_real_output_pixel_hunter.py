@@ -24,7 +24,7 @@ RESIZED_DATA_Y = 2
 FUTURE_REWARD_DISCOUNT = 0.9
 
 
-probability_of_random_action = 0.5 
+probability_of_random_action = 1.0 
 sum_writer_index = 0
 train_play_loop = 10
 
@@ -39,6 +39,8 @@ steps_done = 0
 steps_needed = 0
 step = 0
 reward_avg = 0
+reward_avg_count = 0
+
 
 #build a 10x2 array 
 def get_current_state():
@@ -166,10 +168,15 @@ def train(observations):
         	agents_expected_reward.append(rewards[i] + FUTURE_REWARD_DISCOUNT * np.max(agents_reward_per_action[i]))
 
 	global reward_avg
-	print("reward_avg", reward_avg)
+	global reward_avg_count
+	#print("reward_avg", reward_avg)
+	if reward_avg_count > 0:
+		reward_avg = reward_avg / reward_avg_count
+
 	rew = np.array(reward_avg)
 	reward_avg = 0
-	#_, result = session.run([train_operation, merged], feed_dict={input_layer: previous_states, action : actions, target: agents_expected_reward})
+	reward_avg_count = 0
+
 	_,__, result = session.run([train_operation,show_reward, merged], feed_dict={reward1: rew, input_layer: previous_states, action : actions, target: agents_expected_reward})
 
 	sum_writer.add_summary(result, sum_writer_index)
@@ -282,8 +289,8 @@ with tf.name_scope("fc_2") as fc_2:
         fc2_w_hist = tf.histogram_summary("fc_2/weights", fc2_weights)
         fc2_b_hist = tf.histogram_summary("fc_2/biases", fc2_biases)
 
-	output_layer = tf.matmul(final_hidden_activation, fc2_weights) + fc2_biases
-	#output_layer = tf.nn.tanh(tf.matmul(final_hidden_activation, fc2_weights) + fc2_biases)
+	#output_layer = tf.matmul(final_hidden_activation, fc2_weights) + fc2_biases
+	output_layer = tf.nn.tanh(tf.matmul(final_hidden_activation, fc2_weights) + fc2_biases)
 	ol_hist = tf.histogram_summary("output_layer", output_layer)
 
 
@@ -349,14 +356,20 @@ try:
 		global steps_punish
 
 		if reward > 0:
-			if steps_done == 1:
-				reward = reward * 10
-			elif steps_done > 1:
-				reward = reward
-		else:
-			reward = -1
-		
-		reward_avg += reward
+			if steps_done > steps_needed:
+				reward = 0.1
+			elif steps_done == steps_needed:
+				if steps_needed == 1:
+					reward = 1.0
+				else:
+					reward = 0.2
+			elif steps_done < steps_needed:
+				reward = 0.3
+			elif steps_done == 1:
+				reward = 1.0
+	
+			reward_avg += reward
+			reward_avg_count += 1
 
 		observations.append((last_state, last_action, reward, current_state))	
 
@@ -369,7 +382,6 @@ try:
 		if obs > OBSERVATION_STEPS:
 			global reward_avg
 
-			reward_avg = reward_avg / obs
 			obs = 0
 			#for i in range(OBSERVATION_STEPS/MINI_BATCH_SIZE):
 			train(observations)
@@ -395,7 +407,6 @@ try:
 			global step
 			global reward_avg
 
-			#reward_avg += reward
 
 			print probability_of_random_action
 			#print train_play_loop
@@ -405,18 +416,6 @@ try:
 
 			accuracy = accuracy + (steps_done - steps_needed)
 
-#			if probability_of_random_action <= 0.0:
-#				if step == 0:
-#					accuracy = 0
-#				if step >=  1000:
-#					if accuracy > 0:
-#						probability_of_random_action = 0.2
-#				step += 1
-
-			print "accuracy"	
-			print accuracy
-			if accuracy > 1000:
-				accuracy = 0
 
 			old = degree_goal
 			#print("old",old)
@@ -424,7 +423,7 @@ try:
 			#print("deg-goal:", degree_goal)
 			if old > degree_goal:
 				steps_needed = old - degree_goal
-			elif degree_goal > old:
+			else:
 				steps_needed = degree_goal - old
 			#print("steps-needed:", steps_needed)
 			if steps_needed == 0:
