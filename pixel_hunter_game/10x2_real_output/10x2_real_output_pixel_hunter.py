@@ -186,17 +186,17 @@ def train(observations):
 
 #Tkinter loop
 def image_loop():
-        global data
-        global photo
+	global data
+	global photo
 	global canvas
 	global root
 
-        im=Image.fromstring('L', (data.shape[1],data.shape[0]), data.astype('b').tostring())
+        im=Image.frombytes('L', (data.shape[1],data.shape[0]), data.astype('b').tostring())
         photo = ImageTk.PhotoImage(master = canvas, image=im)
         canvas.create_image(10,10,image=photo,anchor=Tkinter.NW)
         root.update()
 
-        root.after(100,image_loop)
+        root.after(0,image_loop)
 
 
 
@@ -213,7 +213,7 @@ frame = Tkinter.Frame(root, width=75, height=75)
 frame.pack()
 canvas = Tkinter.Canvas(frame, width=75,height=75)
 canvas.place(x=-2,y=-2)
-root.after(1000,image_loop) # INCREASE THE 0 TO SLOW IT DOWN
+root.after(0,image_loop) # INCREASE THE 0 TO SLOW IT DOWN
 
 
 #################### create network
@@ -312,8 +312,8 @@ train_operation = tf.train.AdamOptimizer(0.001, epsilon=0.0001).minimize(loss)
 session.run(tf.initialize_all_variables())
 saver = tf.train.Saver()
 
-if os.path.isfile("/home/ros/tensorflow-models/model-mini.ckpt"):
-	saver.restore(session, "/home/ros/tensorflow-models/model-mini.ckpt")
+if os.path.isfile("/home/joe/tensorflow-models/model-mini.ckpt"):
+	saver.restore(session, "/home/joe/tensorflow-models/model-mini.ckpt")
 	print "model restored"
 
 	sum_writer_index = session.run(sum_writer_index_var)
@@ -388,7 +388,7 @@ try:
 		
 			#print "save model"
 			if obs_s > 1000:
-			        save_path = saver.save(session, "/home/ros/tensorflow-models/model-mini.ckpt")
+			        save_path = saver.save(session, "/home/joe/tensorflow-models/model-mini.ckpt")
 				obs_s = 0
 
 		last_state = current_state
@@ -453,7 +453,7 @@ try:
 	
 except KeyboardInterrupt:
 	print "save model"
-	save_path = saver.save(session, "/home/ros/tensorflow-models/model-mini.ckpt")
+	save_path = saver.save(session, "/home/joe/tensorflow-models/model-mini.ckpt")
 	session.close()
 
 

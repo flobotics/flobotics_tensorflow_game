@@ -15,16 +15,16 @@ current_degree = 7
 
 STATE_FRAMES = 4
 NUM_ACTIONS = 3  #stop,left,right 
-MEMORY_SIZE = 300000
-OBSERVATION_STEPS = 1000
-MINI_BATCH_SIZE = 1000
+MEMORY_SIZE = 30000
+OBSERVATION_STEPS = 100
+MINI_BATCH_SIZE = 10
 
 RESIZED_DATA_X = 10 
 RESIZED_DATA_Y = 2 
 FUTURE_REWARD_DISCOUNT = 0.9
 
 
-probability_of_random_action = 0.0 
+probability_of_random_action = 1.0 
 sum_writer_index = 0
 train_play_loop = 10
 
@@ -79,7 +79,7 @@ def choose_next_action(last_state):
 	#simple decreaseing
 	random_loop +=1
 	if random_loop >= 100:
-		probability_of_random_action -= 0.0001
+		probability_of_random_action -= 0.001
 		print probability_of_random_action
 		random_loop = 0
 
@@ -158,12 +158,12 @@ def train(observations):
 
 #Tkinter loop
 def image_loop():
-        global data
-        global photo
+	global data
+	global photo
 	global canvas
 	global root
 
-        im=Image.fromstring('L', (data.shape[1],data.shape[0]), data.astype('b').tostring())
+        im=Image.frombytes('L', (data.shape[1],data.shape[0]), data.astype('b').tostring())
         photo = ImageTk.PhotoImage(master = canvas, image=im)
         canvas.create_image(10,10,image=photo,anchor=Tkinter.NW)
         root.update()
@@ -270,8 +270,8 @@ train_operation = tf.train.AdamOptimizer(0.001, epsilon=0.001).minimize(loss)
 session.run(tf.initialize_all_variables())
 saver = tf.train.Saver()
 
-if os.path.isfile("/home/ros/tensorflow-models/model-mini.ckpt"):
-	saver.restore(session, "/home/ros/tensorflow-models/model-mini.ckpt")
+if os.path.isfile("/home/joe/tensorflow-models/model-mini.ckpt"):
+	saver.restore(session, "/home/joe/tensorflow-models/model-mini.ckpt")
 	print "model restored"
 
 
@@ -291,7 +291,7 @@ try:
 		state_from_env = get_current_state()
 		reward = get_reward(state_from_env)
 	
-		time.sleep(3)	
+		#time.sleep(3)	
 		##tkinter update
 		global data
 		data1 = np.asarray(state_from_env)
@@ -323,7 +323,7 @@ try:
 		
 			#print "save model"
 			if obs_s > 1000:
-			        save_path = saver.save(session, "/home/ros/tensorflow-models/model-mini.ckpt")
+			        save_path = saver.save(session, "/home/joe/tensorflow-models/model-mini.ckpt")
 				obs_s = 0
 
 		last_state = current_state
@@ -397,7 +397,7 @@ try:
 	
 except KeyboardInterrupt:
 	print "save model"
-	save_path = saver.save(session, "/home/ros/tensorflow-models/model-mini.ckpt")
+	save_path = saver.save(session, "/home/joe/tensorflow-models/model-mini.ckpt")
 	session.close()
 
 
