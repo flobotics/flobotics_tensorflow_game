@@ -62,7 +62,7 @@ class Engine(Frame):
         elif preDiff < diff:
             return -1
         elif preDiff == diff:
-            return 0
+            return -0.1
 
     def __init__(self, master):
         '''

@@ -10,7 +10,7 @@ import numpy as np
 from collections import deque
 import random
  
-sys.path.append('/home/ros/eclipse-workspace/pixelhunter')
+sys.path.append('/home/ros/git/flobotics_tensorflow_game/pixelhunter_v2')
 
 #import game_engine
 from game_engine import engine
