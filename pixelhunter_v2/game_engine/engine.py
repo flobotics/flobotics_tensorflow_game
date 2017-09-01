@@ -15,6 +15,9 @@ class Engine(Frame):
     classdocs
     '''
     def colorHunterPixel(self,nr):
+        self.runSteps += 1
+        self.lastStepDistance = abs(nr - self.y)
+        
         if self.x != nr:
             self.canvas.create_rectangle(10+(nr*10),10,20+(nr*10),20,fill="blue")
             self.canvas.create_rectangle(10+(self.x*10),10,20+(self.x*10),20,fill="grey")
@@ -22,6 +25,9 @@ class Engine(Frame):
             self.root.update()
         
     def colorHuntedPixel(self,nr):
+        self.runSteps = 0
+        self.stepsToDo = abs(self.x - nr)
+        self.lastStepDistance = self.stepsToDo
         if self.y != nr:
             self.canvas.create_rectangle(10+(nr*10),20,20+(nr*10),30,fill="red")
             self.canvas.create_rectangle(10+(self.y*10),20,20+(self.y*10),30,fill="grey")
@@ -45,24 +51,28 @@ class Engine(Frame):
         
     def getReward(self):
         if self.x == self.y:
-            self.lastDiff = 0
-            return 1
-        elif self.x > self.y:
-            diff = self.x - self.y
-            preDiff = self.lastDiff
-            self.lastDiff = diff
+            return 1.0
+        return 0.0
+                
+        #if self.x == self.y:
+        #    self.lastDiff = 0
+        #    return 1
+        #elif self.x > self.y:
+        #    diff = self.x - self.y
+        #    preDiff = self.lastDiff
+        #    self.lastDiff = diff
                      
-        elif self.x < self.y:
-            diff = self.y - self.x
-            preDiff = self.lastDiff
-            self.lastDiff = diff
+        #elif self.x < self.y:
+        #    diff = self.y - self.x
+        #   preDiff = self.lastDiff
+        #    self.lastDiff = diff
             
-        if preDiff > diff: 
-            return 0.1
-        elif preDiff < diff:
-            return -1
-        elif preDiff == diff:
-            return -0.1
+        #if preDiff > diff: 
+        #    return 0.1
+        #elif preDiff < diff:
+        #    return -1
+        #elif preDiff == diff:
+         #   return -0.1
 
     def __init__(self, master):
         '''
@@ -73,6 +83,10 @@ class Engine(Frame):
         self.maxX = 0
         self.maxY = 0
         self.lastDiff = 0
+        self.runSteps = 0
+        self.stepsToDo = 0
+        self.lastStepDistance = 0
+        
         self.root = master
         self.canvas = Canvas(self.root, width=150,height=150)
         self.canvas.pack()

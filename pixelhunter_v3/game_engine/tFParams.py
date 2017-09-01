@@ -10,6 +10,9 @@ import numpy as np
 import random
 from math import sqrt
 from keras.backend.tensorflow_backend import transpose
+from tensorflow.python.ops import init_ops
+import time
+from tensorflow.python.training.training_util import global_step
 
 
 class tFParams():
@@ -24,7 +27,9 @@ class tFParams():
           Tensor of shape [1, (Y+2*pad)*grid_Y, (X+2*pad)*grid_X, NumChannels].
         '''
         if kernel == 0:
-            kernel = self.conv_weights_1
+            #kernel = self.conv_weights_1
+            with tf.variable_scope("conv1", reuse=True):
+                kernel = tf.get_variable("conv2d/kernel")
         if kernel == 1:
             kernel = self.conv_weights_2
         # get shape of the grid. NumKernels == grid_Y * grid_X
@@ -87,6 +92,7 @@ class tFParams():
     
         self.agents_expected_reward = []
         self.agents_reward_per_action = self.session.run(self.output_layer, feed_dict={self.input_layer: self.current_states})
+        print("jojo>",self.agents_reward_per_action.shape)
         
         if self.reward_avg_count > 0:
             self.reward_avg = self.reward_avg / self.reward_avg_count
@@ -104,6 +110,8 @@ class tFParams():
         self.sum_writer_index += 1
     
         self.session.run(self.add_sum_writer_index_var)
+        
+        self.train_counter += 1
         
     #we choose a random or learned action
     def choose_next_action(self, last_state, probability_of_random_action):   
@@ -124,25 +132,37 @@ class tFParams():
         return new_action
     
     def createHistogramSummaries(self):
-        self.cw1_hist = tf.histogram_summary("conv1/weights", self.conv_weights_1)
-        self.cb1_hist = tf.histogram_summary("conv1/biases", self.conv_biases_1)
+        #self.cw1_hist = tf.summary.histogram("conv1/weights", self.conv_weights_1)
         
-        self.cw2_hist = tf.histogram_summary("conv2/weights", self.conv_weights_2)
-        self.cb2_hist = tf.histogram_summary("conv2/biases", self.conv_biases_2)
+        with tf.variable_scope("conv1", reuse=True):
+            c = tf.get_variable("conv2d/bias")
+            self.cb1_hist = tf.summary.histogram("conv1/biases", c)
+            
+            c1 = tf.get_variable("conv2d/kernel")
+            self.cw1_hist = tf.summary.histogram("conv1/weights", c1)
         
-        self.fc1_b_hist = tf.histogram_summary("fc_1/biases", self.fc1_biases)
-        self.fc1_w_hist = tf.histogram_summary("fc_1/weights", self.fc1_weights)
+        with tf.variable_scope("conv2", reuse=True):
+            c2 = tf.get_variable("conv2d/bias")
+            self.cw2_hist = tf.summary.histogram("conv2/biases", c2)
+            c3 = tf.get_variable("conv2d/kernel")
+            self.cb2_hist = tf.summary.histogram("conv2/weights", c3)
+            
+        with tf.variable_scope("fc_1", reuse=True):
+            c4 = tf.get_variable("dense/bias")
+            self.fc1_b_hist = tf.summary.histogram("fc_1/biases", c4)
+            c5 = tf.get_variable("dense/kernel")
+            self.fc1_w_hist = tf.summary.histogram("fc_1/weights", c5)
         
-        self.fc2_w_hist = tf.histogram_summary("fc_2/weights", self.fc2_weights)
-        self.fc2_b_hist = tf.histogram_summary("fc_2/biases", self.fc2_biases)
+        self.fc2_w_hist = tf.summary.histogram("fc_2/weights", self.fc2_weights)
+        self.fc2_b_hist = tf.summary.histogram("fc_2/biases", self.fc2_biases)
         
-        self.r_hist = tf.histogram_summary("readout_action", self.readout_action)
+        self.r_hist = tf.summary.histogram("readout_action", self.readout_action)
         
-        tf.scalar_summary("loss", self.loss)
+        tf.summary.scalar("loss", self.loss)
         
-        self.merged = tf.merge_all_summaries()
-        
-        self.sum_writer = tf.train.SummaryWriter('/tmp/train/c/', self.session.graph)
+        self.merged = tf.summary.merge_all()
+    
+        self.sum_writer = tf.summary.FileWriter('/tmp/train/'+self.timestamp, self.session.graph, flush_secs=30)
         
     def createFilterVisualization(self):
         grid = self.put_kernels_on_grid (0)
@@ -158,11 +178,64 @@ class tFParams():
         #grid3 = self.put_kernels_on_grid (1)
         #tf.summary.image('conv1/filters-fc2', grid3, max_outputs=1)
     
+    def createConvNet_1(self):
+        with tf.name_scope("conv1") as conv1:
+            with tf.variable_scope("conv1"):  
+                self.h_conv1 = tf.layers.conv2d(self.input_layer, 12, [2,2],
+                                                padding='same',
+                                                activation=tf.nn.relu,
+                                                bias_initializer=init_ops.TruncatedNormal(0.0, 0.01),
+                                                kernel_initializer=init_ops.TruncatedNormal(0.0, 0.01))
+                
+                
+            self.bn_conv1 = tf.layers.batch_normalization(self.h_conv1)
+            
+    def createConvNet_2(self):
+        with tf.name_scope("conv2") as conv2:
+            with tf.variable_scope("conv2"):
+                self.h_conv2 = tf.layers.conv2d(self.bn_conv1, 24, [2,2],
+                                                padding='same',
+                                                activation=tf.nn.relu,
+                                                bias_initializer=init_ops.TruncatedNormal(0.0, 0.01),
+                                                kernel_initializer=init_ops.TruncatedNormal(0.0, 0.01),
+                                                strides=(2,2))
+            
+            self.bn_conv2 = tf.layers.batch_normalization(self.h_conv2)
+            #h_pool2 = max_pool_2x2(h_conv2)
+    def createFCNet_1(self):
+        with tf.name_scope("fc_1") as fc_1:
+            with tf.variable_scope("fc_1"):
+                self.h_pool3_flat = tf.reshape(self.bn_conv2, [-1,5*1*24])
+                self.final_hidden_activation = tf.layers.dense(self.h_pool3_flat, 200,
+                                                               activation=tf.nn.relu,
+                                                               bias_initializer=init_ops.TruncatedNormal(0.0, 0.01),
+                                                               kernel_initializer=init_ops.TruncatedNormal(0.0, 0.01))
+        
+    def createFCNet_2(self):
+        with tf.name_scope("fc_2") as fc_2:
+            with tf.variable_scope("fc_2"):
+                self.fc2_weights = tf.Variable(tf.truncated_normal([200, self.NUM_ACTIONS], stddev=0.01))
+                self.fc2_biases = tf.Variable(tf.constant(0.1, shape=[self.NUM_ACTIONS]))
+            
+                self.output_layer = tf.matmul(self.final_hidden_activation, self.fc2_weights) + self.fc2_biases
+                self.ol_hist = tf.summary.histogram("output_layer", self.output_layer)
+            
+    def createReadOut(self):
+        with tf.name_scope("readout"):
+            self.readout_action = tf.reduce_sum(tf.multiply(self.output_layer, self.action), reduction_indices=1)
+    
+    def createLoss(self):
+        with tf.name_scope("loss_summary"):
+            #self.loss = tf.reduce_mean(tf.square(self.target - self.readout_action))
+            self.loss = tf.reduce_mean(tf.abs(self.target - self.readout_action))
+    
     def getSession(self):
         return self.session
     
     def saveSession(self):
-        self.save_path = self.saver.save(self.session, "/home/ros/tensorflow-models/model-mini.ckpt")
+        if self.train_counter % 100 == 3:
+            self.save_path = self.saver.save(self.session, self.model_save_path+self.model_filename,
+                                             global_step = self.train_counter)
 
     def getRewardAvg(self):
         return self.reward_avg
@@ -188,12 +261,18 @@ class tFParams():
         self.reward_avg_count = 0
         self.reward_avg = 0
         self.sum_writer_index = 0
+        self.timestamp = time.strftime("%c")
+        self.train_counter = 0
+        self.model_save_path = "/home/ros/tensorflow-models/"+self.timestamp+"/"
+        self.model_filename = "model.ckpt"
+        self.restore_model_dir = ""  #change to dir name with stored model,e.g. m2/
+        
         
         
         self.session =  tf.Session()
-        self.action = tf.placeholder("float", [None, NUM_ACTIONS])
-        self.target = tf.placeholder("float", [None])
-        self.input_layer = tf.placeholder("float", [None, RESIZED_DATA_X, RESIZED_DATA_Y, STATE_FRAMES])
+        self.action = tf.placeholder(tf.float32, [None, NUM_ACTIONS])
+        self.target = tf.placeholder(tf.float32, [None])
+        self.input_layer = tf.placeholder(tf.float32, [None, RESIZED_DATA_X, RESIZED_DATA_Y, STATE_FRAMES])
         
         self.sum_writer_index_var = tf.Variable(0, "sum_writer_index_var")
         self.add_sum_writer_index_var = self.sum_writer_index_var.assign(self.sum_writer_index_var + 1)
@@ -201,70 +280,28 @@ class tFParams():
         self.reward_value = tf.Variable(0.0, "reward_value")
         self.reward_placeholder = tf.placeholder("float", [])
         self.assign_reward = self.reward_value.assign(self.reward_placeholder)
-        self.reward_value_hist = tf.scalar_summary("reward_value", self.assign_reward)
+        self.reward_value_hist = tf.summary.scalar("reward_value", self.assign_reward)
         
-        with tf.name_scope("conv1") as conv1:
-            self.conv_weights_1 = tf.Variable(tf.truncated_normal([10, 2, 4,32], stddev=0.01))
-            #self.conv_weights_1 = tf.get_variable("self.conv_weights_1", initializer=tf.truncated_normal([10, 2, 4,32]))
-            self.conv_biases_1 = tf.Variable(tf.constant(0.1, shape=[32]))
-            
-            self.h_conv1 = tf.nn.relu(tf.nn.conv2d(self.input_layer, self.conv_weights_1, strides=[1, 1, 1, 1], padding="SAME") + self.conv_biases_1)
-                
-            self.bn_conv1_mean, self.bn_conv1_variance = tf.nn.moments(self.h_conv1,[0,1,2,3])
-            self.bn_conv1_scale = tf.Variable(tf.ones([32]))
-            self.bn_conv1_offset = tf.Variable(tf.zeros([32]))
-            self.bn_conv1_epsilon = 1e-3
-            self.bn_conv1 = tf.nn.batch_normalization(self.h_conv1, self.bn_conv1_mean, self.bn_conv1_variance, self.bn_conv1_offset, self.bn_conv1_scale, self.bn_conv1_epsilon)
-            
+        self.createConvNet_1()
+        self.createConvNet_2()
+        self.createFCNet_1()
+        self.createFCNet_2()
+        self.createReadOut()
+        self.createLoss()   
         
-        with tf.name_scope("conv2") as conv2:
-            self.conv_weights_2 =tf.Variable(tf.truncated_normal([2,2,32,64], stddev=0.01))
-            self.conv_biases_2 = tf.Variable(tf.constant(0.1, shape=[64]))
-
-            self.h_conv2 = tf.nn.relu(tf.nn.conv2d(self.bn_conv1, self.conv_weights_2, strides=[1, 2, 2, 1], padding="SAME") + self.conv_biases_2)
-    
-            self.bn_conv2_mean, self.bn_conv2_variance = tf.nn.moments(self.h_conv2, [0,1,2,3])
-            self.bn_conv2_scale = tf.Variable(tf.ones([64]))
-            self.bn_conv2_offset = tf.Variable(tf.zeros([64]))
-            self.bn_conv2_epsilon = 1e-3
-            self.bn_conv2 = tf.nn.batch_normalization(self.h_conv2, self.bn_conv2_mean, self.bn_conv2_variance, self.bn_conv2_offset, self.bn_conv2_scale, self.bn_conv2_epsilon)
-    
-            #h_pool2 = max_pool_2x2(h_conv2)
-        
-        
-        with tf.name_scope("fc_1") as fc_1:
-            self.fc1_weights = tf.Variable(tf.truncated_normal([5*1*64, 200], stddev=0.01))
-            self.fc1_biases = tf.Variable(tf.constant(0.1, shape=[200]))
-        
-            self.h_pool3_flat = tf.reshape(self.bn_conv2, [-1,5*1*64])
-            self.final_hidden_activation = tf.nn.relu(tf.matmul(self.h_pool3_flat, self.fc1_weights, name='final_hidden_activation') + self.fc1_biases)
-        
-        with tf.name_scope("fc_2") as fc_2:
-            self.fc2_weights = tf.Variable(tf.truncated_normal([200, NUM_ACTIONS], stddev=0.01))
-            self.fc2_biases = tf.Variable(tf.constant(0.1, shape=[NUM_ACTIONS]))
-        
-            self.output_layer = tf.matmul(self.final_hidden_activation, self.fc2_weights) + self.fc2_biases
-            self.ol_hist = tf.histogram_summary("output_layer", self.output_layer)
-        
-        
-        with tf.name_scope("readout"):
-            self.readout_action = tf.reduce_sum(tf.mul(self.output_layer, self.action), reduction_indices=1)
-            
-        
-        with tf.name_scope("loss_summary"):
-            self.loss = tf.reduce_mean(tf.square(self.target - self.readout_action))
             
         self.createFilterVisualization()    
         self.createHistogramSummaries()
         
               
-        self.train_operation = tf.train.AdamOptimizer(0.0001, epsilon=0.001).minimize(self.loss)
+        self.train_operation = tf.train.AdamOptimizer(0.001).minimize(self.loss)
         
         self.session.run(tf.global_variables_initializer())
         self.saver = tf.train.Saver()
-        
-        if os.path.isfile("/home/ros/tensorflow-models/model-mini.ckpt"):
-            self.saver.restore(self.session, "/home/ros/tensorflow-models/model-mini.ckpt")
+
+        if os.path.isfile(self.model_save_path+self.restore_model_dir+"checkpoint"):
+            ckpt = tf.train.latest_checkpoint(self.model_save_path)
+            self.saver.restore(self.session, ckpt)
             print "model restored"
         
             self.sum_writer_index = self.session.run(self.sum_writer_index_var)

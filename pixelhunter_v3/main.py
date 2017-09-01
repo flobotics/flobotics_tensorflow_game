@@ -10,7 +10,7 @@ import numpy as np
 from collections import deque
 import random
  
-sys.path.append('/home/ros/git/flobotics_tensorflow_game/pixelhunter_v2')
+sys.path.append('/home/ros/git/flobotics_tensorflow_game/pixelhunter_v3')
 
 #import game_engine
 from game_engine import engine
@@ -93,7 +93,8 @@ if __name__ == '__main__':
     
     while True:
         state_from_env = app.getCurrentState()
-        reward = app.getReward()
+        #reward = app.getReward()
+        reward = app.getReward_1()
         allRewards += reward
         
         if first_run:
@@ -101,11 +102,11 @@ if __name__ == '__main__':
             last_state = np.stack(tuple(state_from_env for _ in range(STATE_FRAMES)), axis=2)
             last_action = np.zeros([NUM_ACTIONS])  #speeed of both servos 0
 
-        print("staeenvshape>",np.shape(state_from_env) )
+        #print("staeenvshape>",np.shape(state_from_env) )
         state_from_env = state_from_env.reshape(RESIZED_DATA_X, RESIZED_DATA_Y, 1)
-        print("staeenvshape1>",np.shape(state_from_env) )
+        #print("staeenvshape1>",np.shape(state_from_env) )
         current_state = np.append(last_state[:,:,1:], state_from_env, axis=2)
-        print("staeenvshape2>",np.shape(current_state) )
+        #print("staeenvshape2>",np.shape(current_state) )
         
         observations.append((last_state, last_action, reward, current_state))
         
@@ -123,11 +124,11 @@ if __name__ == '__main__':
             rewardRunStepsCounter = 0
             
             tfp.train(observations)
-            #tfp.saveSession()
+            tfp.saveSession()
         
         last_state = current_state
         last_action = tfp.choose_next_action(last_state, probability_of_random_action)
-        probability_of_random_action -= 0.000001
+        probability_of_random_action -= 0.00001
         #print(probability_of_random_action)
         
         

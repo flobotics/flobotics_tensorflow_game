@@ -305,8 +305,8 @@ train_operation = tf.train.AdamOptimizer(0.0001, epsilon=0.001).minimize(loss)
 session.run(tf.initialize_all_variables())
 saver = tf.train.Saver()
 
-if os.path.isfile("/home/joe/tensorflow-models/model-mini.ckpt"):
-	saver.restore(session, "/home/joe/tensorflow-models/model-mini.ckpt")
+if os.path.isfile("/home/ros/tensorflow-models/model-mini.ckpt"):
+	saver.restore(session, "/home/ros/tensorflow-models/model-mini.ckpt")
 	print "model restored"
 
 	sum_writer_index = session.run(sum_writer_index_var)
@@ -376,7 +376,7 @@ try:
 		
 			#print "save model"
 			if obs_s > 1000:
-			        save_path = saver.save(session, "/home/joe/tensorflow-models/model-mini.ckpt")
+			        save_path = saver.save(session, "/home/ros/tensorflow-models/model-mini.ckpt")
 				obs_s = 0
 
 		last_state = current_state
@@ -427,7 +427,7 @@ try:
 	
 except KeyboardInterrupt:
 	print "save model"
-	save_path = saver.save(session, "/home/joe/tensorflow-models/model-mini.ckpt")
+	save_path = saver.save(session, "/home/ros/tensorflow-models/model-mini.ckpt")
 	session.close()
 
 
