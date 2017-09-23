@@ -179,7 +179,7 @@ class tFParams():
         #tf.summary.image('conv1/filters-fc2', grid3, max_outputs=1)
     
     def createConvNet_1(self):
-        with tf.name_scope("conv1") as conv1:
+        with tf.name_scope("conv1"):
             with tf.variable_scope("conv1"):  
                 self.h_conv1 = tf.layers.conv2d(self.input_layer, 12, [2,2],
                                                 padding='same',
@@ -188,10 +188,10 @@ class tFParams():
                                                 kernel_initializer=init_ops.TruncatedNormal(0.0, 0.01))
                 
                 
-            self.bn_conv1 = tf.layers.batch_normalization(self.h_conv1)
+                self.bn_conv1 = tf.layers.batch_normalization(self.h_conv1)
             
     def createConvNet_2(self):
-        with tf.name_scope("conv2") as conv2:
+        with tf.name_scope("conv2"):
             with tf.variable_scope("conv2"):
                 self.h_conv2 = tf.layers.conv2d(self.bn_conv1, 24, [2,2],
                                                 padding='same',
@@ -200,19 +200,20 @@ class tFParams():
                                                 kernel_initializer=init_ops.TruncatedNormal(0.0, 0.01),
                                                 strides=(2,2))
             
-            self.bn_conv2 = tf.layers.batch_normalization(self.h_conv2)
-            #h_pool2 = max_pool_2x2(h_conv2)
+                self.bn_conv2 = tf.layers.batch_normalization(self.h_conv2)
+                #####h_pool2 = max_pool_2x2(h_conv2)
     def createFCNet_1(self):
-        with tf.name_scope("fc_1") as fc_1:
+        with tf.name_scope("fc_1"):
             with tf.variable_scope("fc_1"):
                 self.h_pool3_flat = tf.reshape(self.bn_conv2, [-1,5*1*24])
+                #self.h_pool3_flat = tf.reshape(self.h_conv2, [-1,5*1*24])
                 self.final_hidden_activation = tf.layers.dense(self.h_pool3_flat, 200,
                                                                activation=tf.nn.relu,
                                                                bias_initializer=init_ops.TruncatedNormal(0.0, 0.01),
                                                                kernel_initializer=init_ops.TruncatedNormal(0.0, 0.01))
         
     def createFCNet_2(self):
-        with tf.name_scope("fc_2") as fc_2:
+        with tf.name_scope("fc_2"):
             with tf.variable_scope("fc_2"):
                 self.fc2_weights = tf.Variable(tf.truncated_normal([200, self.NUM_ACTIONS], stddev=0.01))
                 self.fc2_biases = tf.Variable(tf.constant(0.1, shape=[self.NUM_ACTIONS]))
@@ -270,15 +271,15 @@ class tFParams():
         
         
         self.session =  tf.Session()
-        self.action = tf.placeholder(tf.float32, [None, NUM_ACTIONS])
-        self.target = tf.placeholder(tf.float32, [None])
-        self.input_layer = tf.placeholder(tf.float32, [None, RESIZED_DATA_X, RESIZED_DATA_Y, STATE_FRAMES])
+        self.action = tf.placeholder(tf.float32, [None, NUM_ACTIONS], "action")
+        self.target = tf.placeholder(tf.float32, [None], "target")
+        self.input_layer = tf.placeholder(tf.float32, [None, RESIZED_DATA_X, RESIZED_DATA_Y, STATE_FRAMES], "input_layer")
         
         self.sum_writer_index_var = tf.Variable(0, "sum_writer_index_var")
         self.add_sum_writer_index_var = self.sum_writer_index_var.assign(self.sum_writer_index_var + 1)
         
         self.reward_value = tf.Variable(0.0, "reward_value")
-        self.reward_placeholder = tf.placeholder("float", [])
+        self.reward_placeholder = tf.placeholder("float", [], "reward_placeholder")
         self.assign_reward = self.reward_value.assign(self.reward_placeholder)
         self.reward_value_hist = tf.summary.scalar("reward_value", self.assign_reward)
         
